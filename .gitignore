@@ -1,0 +1,16 @@
+.env
+.env.example
+node_modules/
+__pycache__/
+*.pyc
+.venv/
+venv/
+.next/
+out/
+build/
+dist/
+coverage/
+local_services/postgresql/data/
+local_services/postgresql/pgsql/
+*.log
+.DS_Store
