@@ -33,13 +33,19 @@ WORKDIR /app
 # ------------------------------------------------------------------------------
 # Backend Setup
 # ------------------------------------------------------------------------------
-COPY backend/pyproject.toml backend/
-WORKDIR /app/backend
+#COPY backend/pyproject.toml backend/
+#WORKDIR /app/backend
 # Install python dependencies
-RUN pip install --no-cache-dir -e ".[dev]"
+#RUN pip install --no-cache-dir -e ".[dev]"
+
+
 
 # Copy backend source code
 COPY backend/ /app/backend/
+
+WORKDIR /app/backend
+
+RUN pip install --no-cache-dir -e .
 
 # ------------------------------------------------------------------------------
 # Frontend Setup
