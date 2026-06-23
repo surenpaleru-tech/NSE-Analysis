@@ -54,7 +54,7 @@ WORKDIR /app/frontend
 # Next.js standalone output contains everything needed to run the server
 COPY --from=frontend-builder /app/frontend/.next/standalone ./
 COPY --from=frontend-builder /app/frontend/.next/static ./.next/static
-COPY --from=frontend-builder /app/frontend/public ./public
+#COPY --from=frontend-builder /app/frontend/public ./public
 
 # ------------------------------------------------------------------------------
 # Supervisor Setup
