@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { TrendingUp, TrendingDown } from "lucide-react";
+import { fetchMonthlyIndex } from "../../../lib/api";
 
 const sampleMonthlyData = [
   { symbol: "NIFTY", spot: 24856.50, ce_pct: 6.0, pe_pct: 5.0, ce_strike: 26348, pe_strike: 23614, probability: 0.88, expected_return: 0.032, sharpe: 1.85 },
@@ -12,7 +13,33 @@ const sampleMonthlyData = [
 ];
 
 export default function MonthlyIndexPage() {
-  const [data] = useState(sampleMonthlyData);
+  const [data, setData] = useState(sampleMonthlyData);
+
+  useEffect(() => {
+    async function loadData() {
+      try {
+        const result = await fetchMonthlyIndex();
+        if (result && result.length > 0) {
+          // Map Recommendation format to the page row format if needed
+          const mapped = result.map(r => ({
+            symbol: r.symbol,
+            spot: r.spot_price ?? 0,
+            ce_pct: r.recommended_ce_pct ?? 0,
+            pe_pct: r.recommended_pe_pct ?? 0,
+            ce_strike: r.recommended_ce_strike ?? 0,
+            pe_strike: r.recommended_pe_strike ?? 0,
+            probability: r.combined_probability ?? 0,
+            expected_return: r.expected_return ?? 0,
+            sharpe: r.risk_score ?? 0, // Fallback to risk score if needed, or default to 0
+          }));
+          setData(mapped);
+        }
+      } catch (err) {
+        console.error("Failed to load monthly index recommendations:", err);
+      }
+    }
+    loadData();
+  }, []);
 
   return (
     <>

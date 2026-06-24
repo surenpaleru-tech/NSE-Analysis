@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Zap, TrendingUp, TrendingDown, Filter } from "lucide-react";
+import { fetchOpportunities } from "../../../lib/api";
 
 const sampleOpportunities = [
   { rank: 1, symbol: "RELIANCE", type: "stock", expiry: "monthly", spot: 2945.80, ce_pct: 7.0, pe_pct: 6.0, probability: 0.82, expected_return: 0.035, risk_score: 0.28, regime: "sideways" },
@@ -17,15 +18,37 @@ const sampleOpportunities = [
 export default function ScannerPage() {
   const [sortBy, setSortBy] = useState("expected_return");
   const [typeFilter, setTypeFilter] = useState("all");
+  const [opportunities, setOpportunities] = useState<any[]>([]);
 
-  const filtered = sampleOpportunities
-    .filter(o => typeFilter === "all" || o.type === typeFilter)
-    .sort((a, b) => {
-      if (sortBy === "expected_return") return (b.expected_return ?? 0) - (a.expected_return ?? 0);
-      if (sortBy === "probability") return (b.probability ?? 0) - (a.probability ?? 0);
-      if (sortBy === "risk_score") return (a.risk_score ?? 1) - (b.risk_score ?? 1);
-      return 0;
-    });
+  useEffect(() => {
+    async function loadData() {
+      try {
+        const res = await fetchOpportunities(sortBy);
+        if (res && res.opportunities) {
+          const mapped = res.opportunities.map((o, idx) => ({
+            rank: idx + 1,
+            symbol: o.symbol,
+            type: o.instrument_type,
+            expiry: o.expiry_type,
+            spot: o.spot_price ?? 0,
+            ce_pct: o.recommended_ce_pct ?? 0,
+            pe_pct: o.recommended_pe_pct ?? 0,
+            probability: o.combined_probability ?? 0,
+            expected_return: o.expected_return ?? 0,
+            risk_score: o.risk_score ?? 0,
+            regime: o.market_regime ?? "sideways",
+          }));
+          setOpportunities(mapped);
+        }
+      } catch (err) {
+        console.error("Failed to load scanner opportunities:", err);
+      }
+    }
+    loadData();
+  }, [sortBy]);
+
+  const filtered = opportunities
+    .filter(o => typeFilter === "all" || o.type === typeFilter);
 
   return (
     <>

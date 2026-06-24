@@ -144,6 +144,15 @@ export async function fetchRegimeAnalysis(symbol: string, expiryType = "monthly"
   });
 }
 
+export async function fetchComparison(symbols: string, expiryType = "monthly") {
+  return apiFetch<{
+    expiry_type: string;
+    comparison: ComparisonItem[];
+  }>("/api/v1/analytics/compare", {
+    params: { symbols, expiry_type: expiryType },
+  });
+}
+
 // =============================================================================
 // Scanner API
 // =============================================================================
@@ -225,7 +234,24 @@ export interface RegimeData {
   combined_win_rate: number | null;
   expected_value: number | null;
   sharpe_ratio: number | null;
+  sortino_ratio?: number | null;
+  calmar_ratio?: number | null;
   max_drawdown: number | null;
+  kelly_criterion?: number | null;
+}
+
+export interface ComparisonItem {
+  symbol: string;
+  instrument_type: string;
+  recommended_ce_pct: number | null;
+  recommended_pe_pct: number | null;
+  combined_win_rate: number | null;
+  expected_value: number | null;
+  sharpe_ratio: number | null;
+  sortino_ratio?: number | null;
+  calmar_ratio?: number | null;
+  max_drawdown: number | null;
+  kelly_criterion?: number | null;
 }
 
 export interface Opportunity {

@@ -34,11 +34,6 @@ dependencies = [
     "numpy>=2.0.0",
     "pandas>=2.2.0",
 
-    # Task queue
-    "celery>=5.4.0",
-    "redis>=5.2.0",
-    "kombu>=5.4.0",
-
     # Authentication
     "python-jose[cryptography]>=3.3.0",
     "passlib[bcrypt]>=1.7.4",

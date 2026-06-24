@@ -42,14 +42,23 @@ app = FastAPI(
     redoc_url="/api/redoc",
 )
 
-# CORS middleware
+import os
+
+# CORS middleware — allow Render URLs and local development
+cors_origins = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "http://localhost",
+]
+# Add Render deployed URL if available
+render_url = os.environ.get("RENDER_EXTERNAL_URL")
+if render_url:
+    cors_origins.append(render_url)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",
-        "http://127.0.0.1:3000",
-        "http://localhost",
-    ],
+    allow_origins=cors_origins,
+    allow_origin_regex=r"https://.*\.onrender\.com",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

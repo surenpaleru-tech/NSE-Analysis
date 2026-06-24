@@ -13,9 +13,6 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 # Load environment variables into os.environ
 load_dotenv()
 
-# Force redis-py to use RESP2 (avoids 'HELLO' command error with Redis 5.0)
-os.environ["REDIS_SERIALIZATION_PROTOCOL"] = os.environ.get("REDIS_SERIALIZATION_PROTOCOL", "2")
-
 
 class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
@@ -37,8 +34,9 @@ class Settings(BaseSettings):
     app_port: int = 8000
 
     # -------------------------------------------------------------------------
-    # PostgreSQL
+    # PostgreSQL / Supabase
     # -------------------------------------------------------------------------
+    database_url_override: Optional[str] = None  # Set via DATABASE_URL env var
     postgres_host: str = "localhost"
     postgres_port: int = 5432
     postgres_db: str = "nse_intelligence"
@@ -47,6 +45,19 @@ class Settings(BaseSettings):
 
     @property
     def database_url(self) -> str:
+        """
+        Returns async database URL.
+        Priority: DATABASE_URL env var > constructed from individual vars.
+        Auto-converts postgresql:// to postgresql+asyncpg:// for Supabase.
+        """
+        raw_url = self.database_url_override or os.environ.get("DATABASE_URL")
+        if raw_url:
+            # Supabase gives postgresql:// — convert to asyncpg driver
+            if raw_url.startswith("postgresql://"):
+                return raw_url.replace("postgresql://", "postgresql+asyncpg://", 1)
+            if raw_url.startswith("postgres://"):
+                return raw_url.replace("postgres://", "postgresql+asyncpg://", 1)
+            return raw_url
         return (
             f"postgresql+asyncpg://{self.postgres_user}:{self.postgres_password}"
             f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
@@ -54,20 +65,20 @@ class Settings(BaseSettings):
 
     @property
     def database_url_sync(self) -> str:
+        """Returns sync database URL for Alembic migrations."""
+        raw_url = self.database_url_override or os.environ.get("DATABASE_URL")
+        if raw_url:
+            if raw_url.startswith("postgresql+asyncpg://"):
+                return raw_url.replace("postgresql+asyncpg://", "postgresql+psycopg2://", 1)
+            if raw_url.startswith("postgresql://"):
+                return raw_url.replace("postgresql://", "postgresql+psycopg2://", 1)
+            if raw_url.startswith("postgres://"):
+                return raw_url.replace("postgres://", "postgresql+psycopg2://", 1)
+            return raw_url
         return (
             f"postgresql+psycopg2://{self.postgres_user}:{self.postgres_password}"
             f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
         )
-
-    # -------------------------------------------------------------------------
-    # Redis
-    # -------------------------------------------------------------------------
-    redis_host: str = "localhost"
-    redis_port: int = 6379
-
-    @property
-    def redis_url(self) -> str:
-        return f"redis://{self.redis_host}:{self.redis_port}/0?protocol=2"
 
     # -------------------------------------------------------------------------
     # Qdrant

@@ -157,7 +157,10 @@ async def get_regime_analysis(
             "combined_win_rate": float(band.combined_win_rate) if band.combined_win_rate else None,
             "expected_value": float(band.expected_value) if band.expected_value else None,
             "sharpe_ratio": float(band.sharpe_ratio) if band.sharpe_ratio else None,
+            "sortino_ratio": float(band.sortino_ratio) if band.sortino_ratio else None,
+            "calmar_ratio": float(band.calmar_ratio) if band.calmar_ratio else None,
             "max_drawdown": float(band.max_drawdown) if band.max_drawdown else None,
+            "kelly_criterion": float(band.kelly_criterion) if band.kelly_criterion else None,
             "probability_expire_worthless": float(band.probability_expire_worthless) if band.probability_expire_worthless else None,
         }
 
@@ -202,7 +205,10 @@ async def compare_symbols(
                 "combined_win_rate": float(b.combined_win_rate) if b.combined_win_rate else None,
                 "expected_value": float(b.expected_value) if b.expected_value else None,
                 "sharpe_ratio": float(b.sharpe_ratio) if b.sharpe_ratio else None,
+                "sortino_ratio": float(b.sortino_ratio) if b.sortino_ratio else None,
+                "calmar_ratio": float(b.calmar_ratio) if b.calmar_ratio else None,
                 "max_drawdown": float(b.max_drawdown) if b.max_drawdown else None,
+                "kelly_criterion": float(b.kelly_criterion) if b.kelly_criterion else None,
             }
             for b in bands
         ],

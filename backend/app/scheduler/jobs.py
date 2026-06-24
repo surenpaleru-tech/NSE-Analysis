@@ -1,18 +1,19 @@
 """
 Scheduled job definitions — daily data pipeline and analytics tasks.
+
+These functions are called directly by run_pipeline.py (triggered via Render Cron Jobs)
+instead of Celery. The async functions remain unchanged from the original pipeline logic.
 """
 
 import asyncio
 from datetime import date, timedelta
 
-from app.scheduler.celery_app import celery_app
 from app.core.logging import get_logger
 
 logger = get_logger(__name__)
 
 
-@celery_app.task(bind=True, name="app.scheduler.jobs.run_daily_pipeline")
-def run_daily_pipeline(self):
+def run_daily_pipeline():
     """
     Daily data pipeline — runs after market close.
 
@@ -23,7 +24,6 @@ def run_daily_pipeline(self):
     4. Compute analytics for new expiries
     5. Update optimal bands
     6. Generate daily recommendations
-    7. Send alerts
     """
     logger.info("Starting daily data pipeline")
 
@@ -32,7 +32,7 @@ def run_daily_pipeline(self):
         logger.info("Daily pipeline completed successfully")
     except Exception as e:
         logger.error(f"Daily pipeline failed: {e}")
-        raise self.retry(exc=e, countdown=300, max_retries=3)
+        raise
 
 
 async def _async_daily_pipeline():
@@ -87,7 +87,6 @@ async def _async_daily_pipeline():
             logger.info("Data ingestion phase complete")
 
             # 5. Compute analytics for recently expired contracts
-            # (This runs asynchronously for all symbols)
             from app.analytics.pnl_calculator import PnLCalculator
             from app.analytics.band_optimizer import BandOptimizer
 
@@ -129,25 +128,6 @@ async def _async_daily_pipeline():
         await scraper.close()
 
 
-@celery_app.task(bind=True, name="app.scheduler.jobs.retrain_models")
-def retrain_models(self):
-    """Weekly ML model retraining task."""
-    logger.info("Starting model retraining")
-    try:
-        asyncio.run(_async_retrain())
-        logger.info("Model retraining completed")
-    except Exception as e:
-        logger.error(f"Model retraining failed: {e}")
-        raise self.retry(exc=e, countdown=600, max_retries=2)
-
-
-async def _async_retrain():
-    """Async implementation of model retraining."""
-    # TODO: Implement in Phase 7
-    logger.info("ML model retraining — placeholder for Phase 7")
-
-
-@celery_app.task(name="app.scheduler.jobs.backfill_data")
 def backfill_data(start_date_str: str, end_date_str: str):
     """Backfill historical data for a date range."""
     logger.info(f"Backfilling data from {start_date_str} to {end_date_str}")

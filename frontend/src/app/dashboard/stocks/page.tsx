@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { BarChart3, TrendingUp, TrendingDown, Search } from "lucide-react";
+import { fetchStockRecommendations } from "../../../lib/api";
 
 const sampleStocks = [
   { rank: 1, symbol: "RELIANCE", spot: 2945.80, ce_pct: 7.0, pe_pct: 6.0, probability: 0.82, expected_return: 0.035, risk_score: 0.28 },
@@ -17,8 +18,32 @@ const sampleStocks = [
 ];
 
 export default function StocksPage() {
-  const [data] = useState(sampleStocks);
+  const [data, setData] = useState(sampleStocks);
   const [search, setSearch] = useState("");
+
+  useEffect(() => {
+    async function loadData() {
+      try {
+        const result = await fetchStockRecommendations();
+        if (result && result.length > 0) {
+          const mapped = result.map(r => ({
+            rank: r.rank,
+            symbol: r.symbol,
+            spot: r.spot_price ?? 0,
+            ce_pct: r.recommended_ce_pct ?? 0,
+            pe_pct: r.recommended_pe_pct ?? 0,
+            probability: r.combined_probability ?? 0,
+            expected_return: r.expected_return ?? 0,
+            risk_score: r.risk_score ?? 0,
+          }));
+          setData(mapped);
+        }
+      } catch (err) {
+        console.error("Failed to load stock recommendations:", err);
+      }
+    }
+    loadData();
+  }, []);
 
   const filtered = data.filter(s =>
     s.symbol.toLowerCase().includes(search.toLowerCase())

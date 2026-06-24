@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Shield, TrendingDown, Activity, BarChart3 } from "lucide-react";
+import { fetchComparison, fetchStrategyHistory } from "../../../lib/api";
 
 // Generate sample data
 const generatePnLData = () => {
@@ -40,8 +41,8 @@ function MiniChart({
   color,
   height = 180,
 }: {
-  data: typeof samplePnL;
-  valueKey: keyof typeof samplePnL[0];
+  data: any[];
+  valueKey: string;
   color: string;
   height?: number;
 }) {
@@ -78,7 +79,7 @@ function MiniChart({
 }
 
 // ─── Minimal SVG Bar Chart ────────────────────────────────────────────────────
-function MiniBarChart({ data }: { data: typeof samplePnL }) {
+function MiniBarChart({ data }: { data: any[] }) {
   const last12 = data.slice(-12);
   const values = last12.map(d => d.pnl);
   const max = Math.max(...values.map(Math.abs)) || 1;
@@ -111,7 +112,71 @@ function MiniBarChart({ data }: { data: typeof samplePnL }) {
 // ─── Page ─────────────────────────────────────────────────────────────────────
 export default function RiskDashboardPage() {
   const [selectedSymbol, setSelectedSymbol] = useState("NIFTY");
-  const selected = riskMetrics.find(r => r.symbol === selectedSymbol) || riskMetrics[0];
+  const [metricsList, setMetricsList] = useState(riskMetrics);
+  const [pnlHistory, setPnlHistory] = useState<any[]>(samplePnL);
+
+  useEffect(() => {
+    async function loadComparison() {
+      try {
+        const res = await fetchComparison("NIFTY,BANKNIFTY,FINNIFTY,MIDCPNIFTY,NIFTYNXT50");
+        if (res && res.comparison && res.comparison.length > 0) {
+          const mapped = res.comparison.map(c => ({
+            symbol: c.symbol,
+            sharpe: c.sharpe_ratio ?? 0,
+            sortino: c.sortino_ratio ?? 0,
+            calmar: c.calmar_ratio ?? 0,
+            maxDD: (c.max_drawdown ?? 0) * 100,
+            winRate: (c.combined_win_rate ?? 0) * 100,
+            kelly: c.kelly_criterion ?? 0,
+          }));
+          setMetricsList(mapped);
+        }
+      } catch (err) {
+        console.error("Failed to load comparative risk metrics:", err);
+      }
+    }
+    loadComparison();
+  }, []);
+
+  useEffect(() => {
+    async function loadHistory() {
+      try {
+        const res = await fetchStrategyHistory(selectedSymbol);
+        if (res && res.results && res.results.length > 0) {
+          const chronological = [...res.results].reverse();
+          let cumulative = 0;
+          let peak = 0;
+          const mapped = chronological.map(r => {
+            const val = (r.return_pct ?? 0) * 100; // to percentage
+            cumulative = parseFloat((cumulative + val).toFixed(2));
+            peak = Math.max(peak, cumulative);
+            
+            let monthLabel = r.expiry;
+            try {
+              const d = new Date(r.expiry);
+              const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+              monthLabel = months[d.getMonth()] + " '" + String(d.getFullYear()).slice(-2);
+            } catch {
+              // fallback to raw date
+            }
+
+            return {
+              month: monthLabel,
+              pnl: val,
+              cumulative,
+              drawdown: parseFloat((cumulative - peak).toFixed(2)),
+            };
+          });
+          setPnlHistory(mapped);
+        }
+      } catch (err) {
+        console.error("Failed to load historical PnL details for selected symbol:", err);
+      }
+    }
+    loadHistory();
+  }, [selectedSymbol]);
+
+  const selected = metricsList.find(r => r.symbol === selectedSymbol) || metricsList[0];
 
   return (
     <>
@@ -153,7 +218,7 @@ export default function RiskDashboardPage() {
               Cumulative P&L — {selectedSymbol} Monthly
             </h3>
             <div style={{ height: 200 }}>
-              <MiniChart data={samplePnL} valueKey="cumulative" color="#10b981" height={180} />
+              <MiniChart data={pnlHistory} valueKey="cumulative" color="#10b981" height={180} />
             </div>
             <div style={{ display: "flex", justifyContent: "space-between", marginTop: 8, fontSize: "0.75rem", color: "var(--text-muted)" }}>
               <span>Jan '23</span><span>Jun '23</span><span>Jan '24</span><span>Dec '24</span>
@@ -167,7 +232,7 @@ export default function RiskDashboardPage() {
               Drawdown Analysis
             </h3>
             <div style={{ height: 200 }}>
-              <MiniChart data={samplePnL} valueKey="drawdown" color="#ef4444" height={180} />
+              <MiniChart data={pnlHistory} valueKey="drawdown" color="#ef4444" height={180} />
             </div>
             <div style={{ display: "flex", justifyContent: "space-between", marginTop: 8, fontSize: "0.75rem", color: "var(--text-muted)" }}>
               <span>Jan '23</span><span>Jun '23</span><span>Jan '24</span><span>Dec '24</span>
@@ -181,7 +246,7 @@ export default function RiskDashboardPage() {
               Monthly Returns (Last 12 Months)
             </h3>
             <div style={{ height: 200 }}>
-              <MiniBarChart data={samplePnL} />
+              <MiniBarChart data={pnlHistory} />
             </div>
           </div>
 

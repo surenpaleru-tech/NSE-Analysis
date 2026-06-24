@@ -35,8 +35,8 @@ class PnLCalculator:
         self,
         symbol: str,
         expiry_type: str,
-        vix_values: dict[date, float] = None,
-        market_regimes: dict[date, str] = None,
+        vix_values: dict[date, float] | None = None,
+        market_regimes: dict[date, str] | None = None,
     ) -> int:
         """
         Compute P&L for all CE/PE combinations for all historical expiries.

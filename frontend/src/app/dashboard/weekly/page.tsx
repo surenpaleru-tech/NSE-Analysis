@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Calendar, TrendingUp, TrendingDown } from "lucide-react";
+import { fetchWeeklyIndex } from "../../../lib/api";
 
 const sampleWeeklyData = [
   { symbol: "NIFTY", spot: 24856.50, ce_pct: 3.5, pe_pct: 3.0, ce_strike: 25726, pe_strike: 24111, probability: 0.91, expected_return: 0.024, regime: "sideways" },
@@ -12,7 +13,32 @@ const sampleWeeklyData = [
 ];
 
 export default function WeeklyIndexPage() {
-  const [data] = useState(sampleWeeklyData);
+  const [data, setData] = useState(sampleWeeklyData);
+
+  useEffect(() => {
+    async function loadData() {
+      try {
+        const result = await fetchWeeklyIndex();
+        if (result && result.length > 0) {
+          const mapped = result.map(r => ({
+            symbol: r.symbol,
+            spot: r.spot_price ?? 0,
+            ce_pct: r.recommended_ce_pct ?? 0,
+            pe_pct: r.recommended_pe_pct ?? 0,
+            ce_strike: r.recommended_ce_strike ?? 0,
+            pe_strike: r.recommended_pe_strike ?? 0,
+            probability: r.combined_probability ?? 0,
+            expected_return: r.expected_return ?? 0,
+            regime: r.market_regime ?? "sideways",
+          }));
+          setData(mapped);
+        }
+      } catch (err) {
+        console.error("Failed to fetch dynamic weekly data:", err);
+      }
+    }
+    loadData();
+  }, []);
 
   return (
     <>

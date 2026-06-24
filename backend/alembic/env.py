@@ -25,9 +25,9 @@ if config.config_file_name is not None:
 # Set target metadata
 target_metadata = Base.metadata
 
-# Override sqlalchemy.url with settings
+# Override sqlalchemy.url with settings (use sync URL for alembic)
 settings = get_settings()
-config.set_main_option("sqlalchemy.url", settings.database_url)
+config.set_main_option("sqlalchemy.url", settings.database_url_sync)
 
 
 def run_migrations_offline() -> None:

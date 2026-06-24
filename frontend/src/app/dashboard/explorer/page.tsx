@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useEffect } from "react";
 import { Crosshair } from "lucide-react";
+import { fetchHeatmap } from "../../../lib/api";
 
 // Generate sample heatmap data (13x13 grid: 1% to 13% for both CE and PE)
 const OTM_RANGE = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13];
@@ -31,14 +32,39 @@ function getHeatColor(value: number, min: number, max: number): string {
 export default function BandExplorerPage() {
   const [symbol, setSymbol] = useState("NIFTY");
   const [metric, setMetric] = useState("expected_value");
-  const heatmapData = useMemo(generateHeatmapData, []);
+  const [heatmapData, setHeatmapData] = useState<any[]>(generateHeatmapData());
+
+  useEffect(() => {
+    async function loadHeatmap() {
+      try {
+        const res = await fetchHeatmap(symbol, "monthly", metric);
+        if (res && res.data && res.data.length > 0) {
+          const mapped = res.data.map(d => ({
+            ce: d.ce_pct ?? 0,
+            pe: d.pe_pct ?? 0,
+            value: d.value ?? 0,
+          }));
+          setHeatmapData(mapped);
+        } else {
+          // Fallback to generated data if DB is empty
+          setHeatmapData(generateHeatmapData());
+        }
+      } catch (err) {
+        console.error("Failed to load heatmap data:", err);
+        setHeatmapData(generateHeatmapData());
+      }
+    }
+    loadHeatmap();
+  }, [symbol, metric]);
 
   const values = heatmapData.map(d => d.value);
-  const minVal = Math.min(...values);
-  const maxVal = Math.max(...values);
+  const minVal = values.length > 0 ? Math.min(...values) : -2;
+  const maxVal = values.length > 0 ? Math.max(...values) : 5;
 
   // Find optimal cell
-  const optimal = heatmapData.reduce((best, d) => d.value > best.value ? d : best, heatmapData[0]);
+  const optimal = heatmapData.length > 0
+    ? heatmapData.reduce((best, d) => d.value > best.value ? d : best, heatmapData[0])
+    : { ce: 6, pe: 5, value: 0 };
 
   return (
     <>

@@ -9,6 +9,7 @@ import {
   BarChart3,
   Zap,
 } from "lucide-react";
+import { fetchOverview, fetchOpportunities } from "../../lib/api";
 
 interface OverviewData {
   latest_vix: number | null;
@@ -44,8 +45,41 @@ const sampleTopPicks: QuickRec[] = [
 ];
 
 export default function DashboardOverview() {
-  const [metrics] = useState(sampleMetrics);
-  const [topPicks] = useState<QuickRec[]>(sampleTopPicks);
+  const [metrics, setMetrics] = useState(sampleMetrics);
+  const [topPicks, setTopPicks] = useState<QuickRec[]>(sampleTopPicks);
+
+  useEffect(() => {
+    async function loadData() {
+      try {
+        const [overviewRes, oppsRes] = await Promise.all([
+          fetchOverview(),
+          fetchOpportunities("expected_return", 6),
+        ]);
+        if (overviewRes) {
+          setMetrics({
+            latest_vix: overviewRes.latest_vix ?? sampleMetrics.latest_vix,
+            symbols_tracked: overviewRes.symbols_tracked ?? sampleMetrics.symbols_tracked,
+            latest_recommendations: overviewRes.latest_recommendations ?? sampleMetrics.latest_recommendations,
+            latest_date: overviewRes.latest_date ?? sampleMetrics.latest_date,
+          });
+        }
+        if (oppsRes && oppsRes.opportunities && oppsRes.opportunities.length > 0) {
+          const recs: QuickRec[] = oppsRes.opportunities.map(o => ({
+            symbol: o.symbol,
+            spot_price: o.spot_price,
+            recommended_ce_pct: o.recommended_ce_pct,
+            recommended_pe_pct: o.recommended_pe_pct,
+            combined_probability: o.combined_probability,
+            expected_return: o.expected_return,
+          }));
+          setTopPicks(recs);
+        }
+      } catch (err) {
+        console.error("Failed to load overview dashboard data:", err);
+      }
+    }
+    loadData();
+  }, []);
 
   const formatPercent = (val: number | null) =>
     val !== null ? `${(val * 100).toFixed(1)}%` : "--";
