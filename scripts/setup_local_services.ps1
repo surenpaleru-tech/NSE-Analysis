@@ -61,37 +61,6 @@ if (-not (Test-Path $pgData)) {
     Write-Host "PostgreSQL database directory already exists." -ForegroundColor Green
 }
 
-# 2. Download & Extract Redis
-$redisDest = Join-Path $ServicesDir "redis"
-if (-not (Test-Path $redisDest)) {
-    Write-Host "Downloading Redis 5.0 binaries..." -ForegroundColor Yellow
-    $redisZip = Join-Path $TempDir "redis.zip"
-    Invoke-WebRequest -Uri "https://github.com/tporadowski/redis/releases/download/v5.0.14.1/Redis-x64-5.0.14.1.zip" -OutFile $redisZip
-    
-    Write-Host "Extracting Redis..." -ForegroundColor Yellow
-    New-Item -ItemType Directory -Path $redisDest | Out-Null
-    Expand-Archive -Path $redisZip -DestinationPath $redisDest
-    Remove-Item $redisZip
-    Write-Host "Redis extracted successfully." -ForegroundColor Green
-} else {
-    Write-Host "Redis already downloaded." -ForegroundColor Green
-}
-
-# 3. Download & Extract Qdrant
-$qdrantDest = Join-Path $ServicesDir "qdrant"
-if (-not (Test-Path $qdrantDest)) {
-    Write-Host "Downloading Qdrant 1.11.0 binary..." -ForegroundColor Yellow
-    $qdrantZip = Join-Path $TempDir "qdrant.zip"
-    Invoke-WebRequest -Uri "https://github.com/qdrant/qdrant/releases/download/v1.11.0/qdrant-x86_64-pc-windows-msvc.zip" -OutFile $qdrantZip
-    
-    Write-Host "Extracting Qdrant..." -ForegroundColor Yellow
-    New-Item -ItemType Directory -Path $qdrantDest | Out-Null
-    Expand-Archive -Path $qdrantZip -DestinationPath $qdrantDest
-    Remove-Item $qdrantZip
-    Write-Host "Qdrant extracted successfully." -ForegroundColor Green
-} else {
-    Write-Host "Qdrant already downloaded." -ForegroundColor Green
-}
 
 # Cleanup temp dir
 if (Test-Path $TempDir) {

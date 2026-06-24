@@ -26,16 +26,7 @@ if (Test-Path $pgData) {
     }
 }
 
-# 2. Stop Redis
-Write-Host "Stopping Redis..." -ForegroundColor Yellow
-Stop-Process -Name "redis-server" -Force -ErrorAction SilentlyContinue
-Write-Host "[OK] Redis stopped." -ForegroundColor Green
-
-# 3. Stop Qdrant
-Write-Host "Stopping Qdrant..." -ForegroundColor Yellow
-Stop-Process -Name "qdrant" -Force -ErrorAction SilentlyContinue
-Write-Host "[OK] Qdrant stopped." -ForegroundColor Green
 
 Write-Host "=========================================" -ForegroundColor Green
-Write-Host " All local services stopped." -ForegroundColor Green
+Write-Host " PostgreSQL stopped." -ForegroundColor Green
 Write-Host "=========================================" -ForegroundColor Green
