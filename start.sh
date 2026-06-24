@@ -25,7 +25,7 @@ echo "✓ Docker is running"
 
 # Start infrastructure
 echo "Starting infrastructure..."
-docker-compose up -d postgres redis qdrant ollama
+docker-compose up -d postgres ollama
 sleep 5
 
 # Initialize DB
@@ -35,7 +35,7 @@ docker-compose exec -T postgres psql -U nse_admin -d nse_intelligence \
 
 # Start all services
 echo "Starting backend and frontend..."
-docker-compose up -d backend celery-worker celery-beat frontend nginx
+docker-compose up -d backend frontend nginx
 
 sleep 8
 
@@ -47,5 +47,3 @@ echo "  Dashboard : http://localhost"
 echo "  API Docs  : http://localhost:8000/api/docs"
 echo "  Health    : http://localhost:8000/health"
 echo ""
-echo "Run backfill:"
-echo "  docker-compose exec backend python -c \"from app.scheduler.jobs import backfill_data; backfill_data.delay('2023-01-01', '2024-12-31')\""

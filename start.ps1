@@ -27,8 +27,8 @@ try {
 
 # Pull and start infrastructure
 Write-Host ""
-Write-Host "Starting infrastructure (PostgreSQL, Redis, Qdrant, Ollama)..." -ForegroundColor Yellow
-docker-compose up -d postgres redis qdrant ollama
+Write-Host "Starting infrastructure (PostgreSQL, Ollama)..." -ForegroundColor Yellow
+docker-compose up -d postgres ollama
 Start-Sleep -Seconds 5
 
 # Initialize DB
@@ -39,7 +39,7 @@ docker-compose exec -T postgres psql -U nse_admin -d nse_intelligence -f /docker
 # Start backend
 Write-Host ""
 Write-Host "Starting FastAPI backend..." -ForegroundColor Yellow
-docker-compose up -d backend celery-worker celery-beat
+docker-compose up -d backend
 
 # Start frontend
 Write-Host ""
@@ -68,9 +68,5 @@ Write-Host "  Dashboard   : http://localhost" -ForegroundColor Cyan
 Write-Host "  API Docs    : http://localhost:8000/api/docs" -ForegroundColor Cyan
 Write-Host "  Health      : http://localhost:8000/health" -ForegroundColor Cyan
 Write-Host ""
-Write-Host "To run backfill (download historical data):" -ForegroundColor Yellow
-Write-Host "  docker-compose exec backend python -c ""from app.scheduler.jobs import backfill_data; backfill_data.delay('2023-01-01', '2024-12-31')""" -ForegroundColor White
-Write-Host ""
 Write-Host "To view logs:" -ForegroundColor Yellow
 Write-Host "  docker-compose logs -f backend" -ForegroundColor White
-Write-Host "  docker-compose logs -f celery-worker" -ForegroundColor White
