@@ -176,6 +176,35 @@ async def test_db():
     }
 
 
+from sqlalchemy import func, select
+from app.models import SpotPrice, OptionChain, IndiaVIX, OptimalSellingBand, DailyRecommendation, Alert
+
+@app.get("/api/db-summary", tags=["Health"])
+async def db_summary():
+    counts = {}
+    errors = {}
+    from app.core.database import async_session_factory
+    async with async_session_factory() as session:
+        for model_name, model_cls in [
+            ("SpotPrice", SpotPrice),
+            ("OptionChain", OptionChain),
+            ("IndiaVIX", IndiaVIX),
+            ("OptimalSellingBand", OptimalSellingBand),
+            ("DailyRecommendation", DailyRecommendation),
+            ("Alert", Alert),
+        ]:
+            try:
+                result = await session.execute(select(func.count()).select_from(model_cls))
+                counts[model_name] = result.scalar()
+            except Exception as e:
+                errors[model_name] = str(e)
+    return {
+        "counts": counts,
+        "errors": errors,
+    }
+
+
+
 from fastapi import Request
 from fastapi.responses import JSONResponse
 import traceback
