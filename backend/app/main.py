@@ -113,13 +113,20 @@ async def db_check():
     asyncpg_parsed = {}
     asyncpg_error = None
     try:
-        from asyncpg.connect_utils import parse_connect_arguments
-        _, params = parse_connect_arguments(url)
-        # mask password
-        if "password" in params:
-            params["password"] = "*****"
-        # convert dict keys/values to string for JSON serialization
-        asyncpg_parsed = {str(k): str(v) for k, v in params.items()}
+        from asyncpg.connect_utils import _parse_connect_dsn_and_args
+        addrs, params = _parse_connect_dsn_and_args(
+            dsn=url,
+            host=None, port=None, user=None, password=None, passfile=None, database=None, ssl=None,
+            service=None, servicefile=None, direct_tls=None, server_settings=None,
+            target_session_attrs=None, krbsrvname=None, gsslib=None
+        )
+        asyncpg_parsed = {
+            "addrs": str(addrs),
+            "user": str(params.user),
+            "password": "*****" if params.password else None,
+            "database": str(params.database),
+            "ssl": str(params.ssl),
+        }
     except Exception as e:
         asyncpg_error = str(e)
         
