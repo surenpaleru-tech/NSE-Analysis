@@ -2,7 +2,7 @@
  * API Client — communicates with the FastAPI backend.
  */
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
 
 interface FetchOptions extends RequestInit {
   params?: Record<string, string | number | boolean | undefined>;
