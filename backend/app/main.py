@@ -80,35 +80,6 @@ async def health_check():
 
 
 
-from sqlalchemy import func, select
-from app.models import SpotPrice, OptionChain, DailyRecommendation
-
-@app.get("/api/db-dates", tags=["Health"])
-async def db_dates():
-    from app.core.database import async_session_factory
-    async with async_session_factory() as session:
-        # Get unique dates from SpotPrice
-        spot_dates_q = select(SpotPrice.date).distinct().order_by(SpotPrice.date.desc()).limit(10)
-        spot_res = await session.execute(spot_dates_q)
-        spot_dates = [str(d) for d in spot_res.scalars().all()]
-        
-        # Get unique dates from OptionChain (using trade_date column)
-        option_dates_q = select(OptionChain.trade_date).distinct().order_by(OptionChain.trade_date.desc()).limit(10)
-        option_res = await session.execute(option_dates_q)
-        option_dates = [str(d) for d in option_res.scalars().all()]
-        
-        # Get unique dates from DailyRecommendation
-        rec_dates_q = select(DailyRecommendation.date).distinct().order_by(DailyRecommendation.date.desc()).limit(10)
-        rec_res = await session.execute(rec_dates_q)
-        rec_dates = [str(d) for d in rec_res.scalars().all()]
-        
-    return {
-        "spot_dates": spot_dates,
-        "option_dates": option_dates,
-        "recommendation_dates": rec_dates,
-    }
-
-
 @app.get("/", tags=["Root"])
 async def root():
     """Root endpoint with API information."""
@@ -119,21 +90,6 @@ async def root():
         "health": "/health",
     }
 
-
-from fastapi import Request
-from fastapi.responses import JSONResponse
-import traceback
-
-@app.exception_handler(Exception)
-async def global_exception_handler(request: Request, exc: Exception):
-    return JSONResponse(
-        status_code=500,
-        content={
-            "error": "Internal Server Error",
-            "message": str(exc),
-            "traceback": traceback.format_exc(),
-        }
-    )
 
 
 
