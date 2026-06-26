@@ -92,7 +92,7 @@ async def root():
 from urllib.parse import urlparse
 import socket
 
-@app.get("/db-check", tags=["Health"])
+@app.get("/api/db-check", tags=["Health"])
 async def db_check():
     url = settings.database_url
     
