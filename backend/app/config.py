@@ -50,35 +50,118 @@ class Settings(BaseSettings):
         Priority: DATABASE_URL env var > constructed from individual vars.
         Auto-converts postgresql:// to postgresql+asyncpg:// for Supabase.
         """
+        import urllib.parse
         raw_url = self.database_url_override or os.environ.get("DATABASE_URL") or os.environ.get("database_url")
         if raw_url:
             raw_url = raw_url.strip()
-            # Supabase gives postgresql:// — convert to asyncpg driver
-            if raw_url.startswith("postgresql://"):
-                return raw_url.replace("postgresql://", "postgresql+asyncpg://", 1)
-            if raw_url.startswith("postgres://"):
-                return raw_url.replace("postgres://", "postgresql+asyncpg://", 1)
-            return raw_url
+            # Determine target scheme
+            target_scheme = "postgresql+asyncpg"
+            if raw_url.startswith("postgresql+asyncpg://"):
+                target_scheme = "postgresql+asyncpg"
+            elif raw_url.startswith("postgresql://"):
+                target_scheme = "postgresql+asyncpg"
+            elif raw_url.startswith("postgres://"):
+                target_scheme = "postgresql+asyncpg"
+            else:
+                try:
+                    parsed = urllib.parse.urlsplit(raw_url)
+                    target_scheme = parsed.scheme
+                except Exception:
+                    pass
+            
+            try:
+                parsed = urllib.parse.urlsplit(raw_url)
+                username = parsed.username
+                password = parsed.password
+                hostname = parsed.hostname
+                port = parsed.port
+                path = parsed.path
+                query = parsed.query
+                fragment = parsed.fragment
+                
+                netloc = ""
+                if username is not None:
+                    netloc += urllib.parse.quote(urllib.parse.unquote(username))
+                    if password is not None:
+                        netloc += ":" + urllib.parse.quote(urllib.parse.unquote(password))
+                    netloc += "@"
+                if hostname:
+                    netloc += hostname
+                if port is not None:
+                    netloc += f":{port}"
+                return urllib.parse.urlunsplit((target_scheme, netloc, path, query, fragment))
+            except Exception:
+                # Fallback to simple replace if split/unsplit fails
+                if raw_url.startswith("postgresql://"):
+                    return raw_url.replace("postgresql://", "postgresql+asyncpg://", 1)
+                if raw_url.startswith("postgres://"):
+                    return raw_url.replace("postgres://", "postgresql+asyncpg://", 1)
+                return raw_url
+                
+        username = urllib.parse.quote(urllib.parse.unquote(self.postgres_user))
+        password = urllib.parse.quote(urllib.parse.unquote(self.postgres_password))
         return (
-            f"postgresql+asyncpg://{self.postgres_user}:{self.postgres_password}"
+            f"postgresql+asyncpg://{username}:{password}"
             f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
         )
 
     @property
     def database_url_sync(self) -> str:
         """Returns sync database URL for Alembic migrations."""
+        import urllib.parse
         raw_url = self.database_url_override or os.environ.get("DATABASE_URL") or os.environ.get("database_url")
         if raw_url:
             raw_url = raw_url.strip()
+            # Determine target scheme
+            target_scheme = "postgresql+psycopg2"
             if raw_url.startswith("postgresql+asyncpg://"):
-                return raw_url.replace("postgresql+asyncpg://", "postgresql+psycopg2://", 1)
-            if raw_url.startswith("postgresql://"):
-                return raw_url.replace("postgresql://", "postgresql+psycopg2://", 1)
-            if raw_url.startswith("postgres://"):
-                return raw_url.replace("postgres://", "postgresql+psycopg2://", 1)
-            return raw_url
+                target_scheme = "postgresql+psycopg2"
+            elif raw_url.startswith("postgresql://"):
+                target_scheme = "postgresql+psycopg2"
+            elif raw_url.startswith("postgres://"):
+                target_scheme = "postgresql+psycopg2"
+            else:
+                try:
+                    parsed = urllib.parse.urlsplit(raw_url)
+                    target_scheme = parsed.scheme
+                except Exception:
+                    pass
+                
+            try:
+                parsed = urllib.parse.urlsplit(raw_url)
+                username = parsed.username
+                password = parsed.password
+                hostname = parsed.hostname
+                port = parsed.port
+                path = parsed.path
+                query = parsed.query
+                fragment = parsed.fragment
+                
+                netloc = ""
+                if username is not None:
+                    netloc += urllib.parse.quote(urllib.parse.unquote(username))
+                    if password is not None:
+                        netloc += ":" + urllib.parse.quote(urllib.parse.unquote(password))
+                    netloc += "@"
+                if hostname:
+                    netloc += hostname
+                if port is not None:
+                    netloc += f":{port}"
+                return urllib.parse.urlunsplit((target_scheme, netloc, path, query, fragment))
+            except Exception:
+                # Fallback to simple replace if split/unsplit fails
+                if raw_url.startswith("postgresql+asyncpg://"):
+                    return raw_url.replace("postgresql+asyncpg://", "postgresql+psycopg2://", 1)
+                if raw_url.startswith("postgresql://"):
+                    return raw_url.replace("postgresql://", "postgresql+psycopg2://", 1)
+                if raw_url.startswith("postgres://"):
+                    return raw_url.replace("postgres://", "postgresql+psycopg2://", 1)
+                return raw_url
+
+        username = urllib.parse.quote(urllib.parse.unquote(self.postgres_user))
+        password = urllib.parse.quote(urllib.parse.unquote(self.postgres_password))
         return (
-            f"postgresql+psycopg2://{self.postgres_user}:{self.postgres_password}"
+            f"postgresql+psycopg2://{username}:{password}"
             f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
         )
 
