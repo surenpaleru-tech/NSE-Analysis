@@ -144,6 +144,38 @@ async def db_check():
     }
 
 
+import asyncpg
+
+@app.get("/api/test-db", tags=["Health"])
+async def test_db():
+    url = settings.database_url
+    dsn = url.replace("postgresql+asyncpg://", "postgresql://", 1)
+    
+    conn_error = None
+    connected = False
+    try:
+        conn = await asyncpg.connect(dsn, ssl="require")
+        connected = True
+        await conn.close()
+    except Exception as e:
+        conn_error = str(e)
+        
+    # Mask password in return DSN
+    masked_dsn = dsn
+    try:
+        parts = dsn.split("@")
+        cred = parts[0].split(":")
+        masked_dsn = f"{cred[0]}:{cred[1]}:*****@{parts[1]}"
+    except:
+        pass
+        
+    return {
+        "dsn_used": masked_dsn,
+        "connected": connected,
+        "conn_error": conn_error,
+    }
+
+
 from fastapi import Request
 from fastapi.responses import JSONResponse
 import traceback
