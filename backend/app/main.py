@@ -108,6 +108,20 @@ async def db_check():
             dns_resolved = socket.gethostbyname(parsed.hostname)
         except Exception as e:
             dns_error = str(e)
+            
+    # Check asyncpg parsing
+    asyncpg_parsed = {}
+    asyncpg_error = None
+    try:
+        from asyncpg.connect_utils import parse_connect_arguments
+        _, params = parse_connect_arguments(url)
+        # mask password
+        if "password" in params:
+            params["password"] = "*****"
+        # convert dict keys/values to string for JSON serialization
+        asyncpg_parsed = {str(k): str(v) for k, v in params.items()}
+    except Exception as e:
+        asyncpg_error = str(e)
         
     return {
         "database_url_configured": bool(os.environ.get("DATABASE_URL") or os.environ.get("database_url")),
@@ -118,6 +132,8 @@ async def db_check():
         "parsed_hostname_repr": repr(parsed.hostname),
         "dns_resolved_ip": dns_resolved,
         "dns_error": dns_error,
+        "asyncpg_parsed": asyncpg_parsed,
+        "asyncpg_error": asyncpg_error,
     }
 
 
