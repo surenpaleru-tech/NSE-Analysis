@@ -50,7 +50,7 @@ class Settings(BaseSettings):
         Priority: DATABASE_URL env var > constructed from individual vars.
         Auto-converts postgresql:// to postgresql+asyncpg:// for Supabase.
         """
-        raw_url = self.database_url_override or os.environ.get("DATABASE_URL")
+        raw_url = self.database_url_override or os.environ.get("DATABASE_URL") or os.environ.get("database_url")
         if raw_url:
             # Supabase gives postgresql:// — convert to asyncpg driver
             if raw_url.startswith("postgresql://"):
@@ -66,7 +66,7 @@ class Settings(BaseSettings):
     @property
     def database_url_sync(self) -> str:
         """Returns sync database URL for Alembic migrations."""
-        raw_url = self.database_url_override or os.environ.get("DATABASE_URL")
+        raw_url = self.database_url_override or os.environ.get("DATABASE_URL") or os.environ.get("database_url")
         if raw_url:
             if raw_url.startswith("postgresql+asyncpg://"):
                 return raw_url.replace("postgresql+asyncpg://", "postgresql+psycopg2://", 1)
