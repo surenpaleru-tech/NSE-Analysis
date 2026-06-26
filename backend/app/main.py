@@ -89,6 +89,38 @@ async def root():
     }
 
 
+from urllib.parse import urlparse
+import socket
+
+@app.get("/db-check", tags=["Health"])
+async def db_check():
+    url = settings.database_url
+    
+    # Mask password for safety
+    parsed = urlparse(url)
+    masked_url = f"{parsed.scheme}://{parsed.username}:*****@{parsed.hostname}:{parsed.port}{parsed.path}"
+    
+    # Check DNS resolution
+    dns_resolved = "Unknown"
+    dns_error = None
+    if parsed.hostname:
+        try:
+            dns_resolved = socket.gethostbyname(parsed.hostname)
+        except Exception as e:
+            dns_error = str(e)
+        
+    return {
+        "database_url_configured": bool(os.environ.get("DATABASE_URL") or os.environ.get("database_url")),
+        "database_url_raw_length": len(os.environ.get("DATABASE_URL") or os.environ.get("database_url") or ""),
+        "masked_url": masked_url,
+        "parsed_hostname": parsed.hostname,
+        "parsed_hostname_len": len(parsed.hostname or ""),
+        "parsed_hostname_repr": repr(parsed.hostname),
+        "dns_resolved_ip": dns_resolved,
+        "dns_error": dns_error,
+    }
+
+
 from fastapi import Request
 from fastapi.responses import JSONResponse
 import traceback
