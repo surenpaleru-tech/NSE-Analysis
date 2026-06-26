@@ -4,16 +4,9 @@ import { useState, useEffect } from "react";
 import { Calendar, TrendingUp, TrendingDown } from "lucide-react";
 import { fetchWeeklyIndex } from "../../../lib/api";
 
-const sampleWeeklyData = [
-  { symbol: "NIFTY", spot: 24856.50, ce_pct: 3.5, pe_pct: 3.0, ce_strike: 25726, pe_strike: 24111, probability: 0.91, expected_return: 0.024, regime: "sideways" },
-  { symbol: "BANKNIFTY", spot: 54230.00, ce_pct: 4.0, pe_pct: 3.5, ce_strike: 56399, pe_strike: 52332, probability: 0.88, expected_return: 0.021, regime: "sideways" },
-  { symbol: "FINNIFTY", spot: 25320.75, ce_pct: 3.5, pe_pct: 3.0, ce_strike: 26207, pe_strike: 24561, probability: 0.90, expected_return: 0.023, regime: "sideways" },
-  { symbol: "MIDCPNIFTY", spot: 12450.25, ce_pct: 4.0, pe_pct: 3.5, ce_strike: 12948, pe_strike: 12014, probability: 0.87, expected_return: 0.019, regime: "bull" },
-  { symbol: "NIFTYNXT50", spot: 68245.00, ce_pct: 4.5, pe_pct: 4.0, ce_strike: 71316, pe_strike: 65515, probability: 0.86, expected_return: 0.018, regime: "sideways" },
-];
-
 export default function WeeklyIndexPage() {
-  const [data, setData] = useState(sampleWeeklyData);
+  const [data, setData] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function loadData() {
@@ -35,6 +28,8 @@ export default function WeeklyIndexPage() {
         }
       } catch (err) {
         console.error("Failed to fetch dynamic weekly data:", err);
+      } finally {
+        setLoading(false);
       }
     }
     loadData();
@@ -63,27 +58,49 @@ export default function WeeklyIndexPage() {
                 </tr>
               </thead>
               <tbody>
-                {data.map(row => (
-                  <tr key={row.symbol} style={{ borderBottom: "1px solid var(--border-glass)", transition: "background 150ms" }}
-                    onMouseEnter={e => e.currentTarget.style.background = "var(--bg-hover)"}
-                    onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
-                    <td style={{ padding: "0.875rem 1rem", fontWeight: 600, color: "var(--text-primary)" }}>{row.symbol}</td>
-                    <td style={{ padding: "0.875rem 1rem", fontFamily: "var(--font-mono)", color: "var(--text-secondary)" }}>₹{row.spot.toLocaleString("en-IN")}</td>
-                    <td style={{ padding: "0.875rem 1rem" }}>
-                      <span className="badge badge-danger"><TrendingUp size={12} style={{ marginRight: 3 }} />+{row.ce_pct}%</span>
-                    </td>
-                    <td style={{ padding: "0.875rem 1rem" }}>
-                      <span className="badge badge-success"><TrendingDown size={12} style={{ marginRight: 3 }} />-{row.pe_pct}%</span>
-                    </td>
-                    <td style={{ padding: "0.875rem 1rem", fontFamily: "var(--font-mono)", fontSize: "0.8rem", color: "var(--text-secondary)" }}>₹{row.ce_strike.toLocaleString("en-IN")}</td>
-                    <td style={{ padding: "0.875rem 1rem", fontFamily: "var(--font-mono)", fontSize: "0.8rem", color: "var(--text-secondary)" }}>₹{row.pe_strike.toLocaleString("en-IN")}</td>
-                    <td style={{ padding: "0.875rem 1rem", fontWeight: 600, color: row.probability > 0.88 ? "var(--accent-emerald)" : "var(--accent-amber)" }}>{(row.probability * 100).toFixed(0)}%</td>
-                    <td style={{ padding: "0.875rem 1rem", fontWeight: 700, color: "var(--accent-emerald)", fontFamily: "var(--font-mono)" }}>{(row.expected_return * 100).toFixed(1)}%</td>
-                    <td style={{ padding: "0.875rem 1rem" }}>
-                      <span className={`badge badge-${row.regime === "bull" ? "success" : row.regime === "bear" ? "danger" : "info"}`}>{row.regime}</span>
+                {loading ? (
+                  Array.from({ length: 5 }).map((_, idx) => (
+                    <tr key={idx} style={{ borderBottom: "1px solid var(--border-glass)" }}>
+                      <td style={{ padding: "0.875rem 1rem" }}><div className="skeleton" style={{ height: 16, width: 60 }} /></td>
+                      <td style={{ padding: "0.875rem 1rem" }}><div className="skeleton" style={{ height: 16, width: 80 }} /></td>
+                      <td style={{ padding: "0.875rem 1rem" }}><div className="skeleton" style={{ height: 16, width: 50 }} /></td>
+                      <td style={{ padding: "0.875rem 1rem" }}><div className="skeleton" style={{ height: 16, width: 50 }} /></td>
+                      <td style={{ padding: "0.875rem 1rem" }}><div className="skeleton" style={{ height: 16, width: 70 }} /></td>
+                      <td style={{ padding: "0.875rem 1rem" }}><div className="skeleton" style={{ height: 16, width: 70 }} /></td>
+                      <td style={{ padding: "0.875rem 1rem" }}><div className="skeleton" style={{ height: 16, width: 60 }} /></td>
+                      <td style={{ padding: "0.875rem 1rem" }}><div className="skeleton" style={{ height: 16, width: 60 }} /></td>
+                      <td style={{ padding: "0.875rem 1rem" }}><div className="skeleton" style={{ height: 16, width: 60 }} /></td>
+                    </tr>
+                  ))
+                ) : data.length === 0 ? (
+                  <tr>
+                    <td colSpan={9} style={{ padding: "2rem", textAlign: "center", color: "var(--text-muted)" }}>
+                      No weekly recommendations found in database.
                     </td>
                   </tr>
-                ))}
+                ) : (
+                  data.map(row => (
+                    <tr key={row.symbol} style={{ borderBottom: "1px solid var(--border-glass)", transition: "background 150ms" }}
+                      onMouseEnter={e => e.currentTarget.style.background = "var(--bg-hover)"}
+                      onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
+                      <td style={{ padding: "0.875rem 1rem", fontWeight: 600, color: "var(--text-primary)" }}>{row.symbol}</td>
+                      <td style={{ padding: "0.875rem 1rem", fontFamily: "var(--font-mono)", color: "var(--text-secondary)" }}>₹{row.spot.toLocaleString("en-IN")}</td>
+                      <td style={{ padding: "0.875rem 1rem" }}>
+                        <span className="badge badge-danger"><TrendingUp size={12} style={{ marginRight: 3 }} />+{row.ce_pct}%</span>
+                      </td>
+                      <td style={{ padding: "0.875rem 1rem" }}>
+                        <span className="badge badge-success"><TrendingDown size={12} style={{ marginRight: 3 }} />-{row.pe_pct}%</span>
+                      </td>
+                      <td style={{ padding: "0.875rem 1rem", fontFamily: "var(--font-mono)", fontSize: "0.8rem", color: "var(--text-secondary)" }}>₹{row.ce_strike.toLocaleString("en-IN")}</td>
+                      <td style={{ padding: "0.875rem 1rem", fontFamily: "var(--font-mono)", fontSize: "0.8rem", color: "var(--text-secondary)" }}>₹{row.pe_strike.toLocaleString("en-IN")}</td>
+                      <td style={{ padding: "0.875rem 1rem", fontWeight: 600, color: row.probability > 0.88 ? "var(--accent-emerald)" : "var(--accent-amber)" }}>{(row.probability * 100).toFixed(0)}%</td>
+                      <td style={{ padding: "0.875rem 1rem", fontWeight: 700, color: "var(--accent-emerald)", fontFamily: "var(--font-mono)" }}>{(row.expected_return * 100).toFixed(1)}%</td>
+                      <td style={{ padding: "0.875rem 1rem" }}>
+                        <span className={`badge badge-${row.regime === "bull" ? "success" : row.regime === "bear" ? "danger" : "info"}`}>{row.regime}</span>
+                      </td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>

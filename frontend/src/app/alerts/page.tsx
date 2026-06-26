@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Bell, Check, X, AlertTriangle, TrendingUp, TrendingDown } from "lucide-react";
+import { fetchAlerts } from "../../lib/api";
 
 interface AlertItem {
   id: number;
@@ -13,14 +14,6 @@ interface AlertItem {
   is_sent: boolean;
   created_at: string;
 }
-
-const sampleAlerts: AlertItem[] = [
-  { id: 1, symbol: "NIFTY", type: "recommendation", title: "New Weekly Recommendation", message: "NIFTY: Sell CE at 25,726 (+3.5%) and PE at 24,111 (-3.0%). Combined probability: 91%", channel: "in_app", is_sent: true, created_at: "2024-11-25T18:05:00Z" },
-  { id: 2, symbol: "BANKNIFTY", type: "recommendation", title: "New Weekly Recommendation", message: "BANKNIFTY: Sell CE at 56,399 (+4.0%) and PE at 52,332 (-3.5%). Combined probability: 88%", channel: "in_app", is_sent: true, created_at: "2024-11-25T18:05:30Z" },
-  { id: 3, symbol: "RELIANCE", type: "high_iv", title: "High IV Alert", message: "RELIANCE IV has spiked to 38%. Premium collection opportunity detected.", channel: "telegram", is_sent: false, created_at: "2024-11-25T14:22:00Z" },
-  { id: 4, symbol: "NIFTY", type: "vix_spike", title: "VIX Spike Alert", message: "India VIX crossed 20 threshold. Consider wider OTM strikes for next expiry.", channel: "in_app", is_sent: true, created_at: "2024-11-24T10:15:00Z" },
-  { id: 5, symbol: "HDFCBANK", type: "recommendation", title: "New Monthly Recommendation", message: "HDFCBANK: Sell CE at 1,906 (+6.5%) and PE at 1,690 (-5.5%). Sharpe: 1.55", channel: "in_app", is_sent: true, created_at: "2024-11-22T18:10:00Z" },
-];
 
 const typeColors: Record<string, string> = {
   recommendation: "badge-info",
@@ -37,8 +30,36 @@ const typeIcons: Record<string, React.ReactNode> = {
 };
 
 export default function AlertsPage() {
-  const [alerts, setAlerts] = useState(sampleAlerts);
+  const [alerts, setAlerts] = useState<AlertItem[]>([]);
+  const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<"all" | "sent" | "pending">("all");
+
+  useEffect(() => {
+    async function loadAlerts() {
+      try {
+        setLoading(true);
+        const res = await fetchAlerts();
+        if (res && res.alerts) {
+          const mapped: AlertItem[] = res.alerts.map(a => ({
+            id: a.id,
+            symbol: a.symbol,
+            type: a.alert_type,
+            title: a.title || "Alert",
+            message: a.message || "",
+            channel: a.channel || "in_app",
+            is_sent: a.is_sent,
+            created_at: a.created_at,
+          }));
+          setAlerts(mapped);
+        }
+      } catch (err) {
+        console.error("Failed to load alerts:", err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadAlerts();
+  }, []);
 
   const filtered = alerts.filter(a => {
     if (filter === "sent") return a.is_sent;
@@ -92,7 +113,26 @@ export default function AlertsPage() {
 
         {/* Alert Cards */}
         <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-          {filtered.length === 0 ? (
+          {loading ? (
+            Array.from({ length: 3 }).map((_, idx) => (
+              <div
+                key={idx}
+                className="glass-card"
+                style={{ padding: "1.25rem 1.5rem" }}
+              >
+                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                  <div style={{ display: "flex", gap: "0.75rem", alignItems: "center" }}>
+                    <div className="skeleton" style={{ height: 20, width: 100 }} />
+                    <div className="skeleton" style={{ height: 20, width: 60 }} />
+                    <div className="skeleton" style={{ height: 16, width: 80 }} />
+                  </div>
+                  <div className="skeleton" style={{ height: 22, width: "60%" }} />
+                  <div className="skeleton" style={{ height: 16, width: "90%" }} />
+                  <div className="skeleton" style={{ height: 14, width: 120 }} />
+                </div>
+              </div>
+            ))
+          ) : filtered.length === 0 ? (
             <div style={{ textAlign: "center", padding: "3rem", color: "var(--text-muted)" }}>
               <Bell size={40} style={{ opacity: 0.3, marginBottom: 12 }} />
               <p>No alerts in this category</p>

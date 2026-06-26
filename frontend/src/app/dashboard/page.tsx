@@ -27,26 +27,15 @@ interface QuickRec {
   expected_return: number | null;
 }
 
-// Sample data for initial display
-const sampleMetrics = {
-  latest_vix: 14.82,
-  symbols_tracked: 198,
-  latest_recommendations: 214,
-  latest_date: new Date().toISOString().split("T")[0],
-};
-
-const sampleTopPicks: QuickRec[] = [
-  { symbol: "NIFTY", spot_price: 24856.50, recommended_ce_pct: 5.0, recommended_pe_pct: 4.0, combined_probability: 0.88, expected_return: 0.032 },
-  { symbol: "BANKNIFTY", spot_price: 54230.00, recommended_ce_pct: 6.0, recommended_pe_pct: 5.0, combined_probability: 0.85, expected_return: 0.028 },
-  { symbol: "FINNIFTY", spot_price: 25320.75, recommended_ce_pct: 5.5, recommended_pe_pct: 4.5, combined_probability: 0.87, expected_return: 0.031 },
-  { symbol: "RELIANCE", spot_price: 2945.80, recommended_ce_pct: 7.0, recommended_pe_pct: 6.0, combined_probability: 0.82, expected_return: 0.025 },
-  { symbol: "HDFCBANK", spot_price: 1789.45, recommended_ce_pct: 6.5, recommended_pe_pct: 5.5, combined_probability: 0.84, expected_return: 0.027 },
-  { symbol: "TCS", spot_price: 3892.20, recommended_ce_pct: 8.0, recommended_pe_pct: 7.0, combined_probability: 0.86, expected_return: 0.029 },
-];
-
 export default function DashboardOverview() {
-  const [metrics, setMetrics] = useState(sampleMetrics);
-  const [topPicks, setTopPicks] = useState<QuickRec[]>(sampleTopPicks);
+  const [metrics, setMetrics] = useState<OverviewData>({
+    latest_vix: null,
+    symbols_tracked: 0,
+    latest_recommendations: 0,
+    latest_date: null,
+  });
+  const [topPicks, setTopPicks] = useState<QuickRec[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function loadData() {
@@ -57,13 +46,13 @@ export default function DashboardOverview() {
         ]);
         if (overviewRes) {
           setMetrics({
-            latest_vix: overviewRes.latest_vix ?? sampleMetrics.latest_vix,
-            symbols_tracked: overviewRes.symbols_tracked ?? sampleMetrics.symbols_tracked,
-            latest_recommendations: overviewRes.latest_recommendations ?? sampleMetrics.latest_recommendations,
-            latest_date: overviewRes.latest_date ?? sampleMetrics.latest_date,
+            latest_vix: overviewRes.latest_vix,
+            symbols_tracked: overviewRes.symbols_tracked,
+            latest_recommendations: overviewRes.latest_recommendations,
+            latest_date: overviewRes.latest_date,
           });
         }
-        if (oppsRes && oppsRes.opportunities && oppsRes.opportunities.length > 0) {
+        if (oppsRes && oppsRes.opportunities) {
           const recs: QuickRec[] = oppsRes.opportunities.map(o => ({
             symbol: o.symbol,
             spot_price: o.spot_price,
@@ -76,6 +65,8 @@ export default function DashboardOverview() {
         }
       } catch (err) {
         console.error("Failed to load overview dashboard data:", err);
+      } finally {
+        setLoading(false);
       }
     }
     loadData();
@@ -217,138 +208,159 @@ export default function DashboardOverview() {
                 </tr>
               </thead>
               <tbody>
-                {topPicks.map((rec, idx) => {
-                  const ceStrike =
-                    rec.spot_price && rec.recommended_ce_pct
-                      ? rec.spot_price * (1 + rec.recommended_ce_pct / 100)
-                      : null;
-                  const peStrike =
-                    rec.spot_price && rec.recommended_pe_pct
-                      ? rec.spot_price * (1 - rec.recommended_pe_pct / 100)
-                      : null;
+                {loading ? (
+                  Array.from({ length: 6 }).map((_, idx) => (
+                    <tr key={idx} style={{ borderBottom: "1px solid var(--border-glass)" }}>
+                      <td style={{ padding: "0.875rem 1rem" }}><div className="skeleton" style={{ height: 16, width: 60 }} /></td>
+                      <td style={{ padding: "0.875rem 1rem" }}><div className="skeleton" style={{ height: 16, width: 80 }} /></td>
+                      <td style={{ padding: "0.875rem 1rem" }}><div className="skeleton" style={{ height: 16, width: 50 }} /></td>
+                      <td style={{ padding: "0.875rem 1rem" }}><div className="skeleton" style={{ height: 16, width: 50 }} /></td>
+                      <td style={{ padding: "0.875rem 1rem" }}><div className="skeleton" style={{ height: 16, width: 70 }} /></td>
+                      <td style={{ padding: "0.875rem 1rem" }}><div className="skeleton" style={{ height: 16, width: 70 }} /></td>
+                      <td style={{ padding: "0.875rem 1rem" }}><div className="skeleton" style={{ height: 16, width: 100 }} /></td>
+                      <td style={{ padding: "0.875rem 1rem" }}><div className="skeleton" style={{ height: 16, width: 60 }} /></td>
+                    </tr>
+                  ))
+                ) : topPicks.length === 0 ? (
+                  <tr>
+                    <td colSpan={8} style={{ padding: "2rem", textAlign: "center", color: "var(--text-muted)" }}>
+                      No recommendations found in database.
+                    </td>
+                  </tr>
+                ) : (
+                  topPicks.map((rec, idx) => {
+                    const ceStrike =
+                      rec.spot_price && rec.recommended_ce_pct
+                        ? rec.spot_price * (1 + rec.recommended_ce_pct / 100)
+                        : null;
+                    const peStrike =
+                      rec.spot_price && rec.recommended_pe_pct
+                        ? rec.spot_price * (1 - rec.recommended_pe_pct / 100)
+                        : null;
 
-                  return (
-                    <tr
-                      key={rec.symbol}
-                      style={{
-                        borderBottom: "1px solid var(--border-glass)",
-                        transition: "background var(--transition-fast)",
-                        cursor: "pointer",
-                      }}
-                      onMouseEnter={(e) =>
-                        (e.currentTarget.style.background =
-                          "var(--bg-hover)")
-                      }
-                      onMouseLeave={(e) =>
-                        (e.currentTarget.style.background = "transparent")
-                      }
-                    >
-                      <td
+                    return (
+                      <tr
+                        key={rec.symbol}
                         style={{
-                          padding: "0.875rem 1rem",
-                          fontWeight: 600,
-                          color: "var(--text-primary)",
+                          borderBottom: "1px solid var(--border-glass)",
+                          transition: "background var(--transition-fast)",
+                          cursor: "pointer",
                         }}
+                        onMouseEnter={(e) =>
+                          (e.currentTarget.style.background =
+                            "var(--bg-hover)")
+                        }
+                        onMouseLeave={(e) =>
+                          (e.currentTarget.style.background = "transparent")
+                        }
                       >
-                        {rec.symbol}
-                      </td>
-                      <td
-                        style={{
-                          padding: "0.875rem 1rem",
-                          fontFamily: "var(--font-mono)",
-                          color: "var(--text-secondary)",
-                        }}
-                      >
-                        {formatPrice(rec.spot_price)}
-                      </td>
-                      <td style={{ padding: "0.875rem 1rem" }}>
-                        <span className="badge badge-danger">
-                          <TrendingUp size={12} style={{ marginRight: 4 }} />
-                          +{rec.recommended_ce_pct}%
-                        </span>
-                      </td>
-                      <td style={{ padding: "0.875rem 1rem" }}>
-                        <span className="badge badge-success">
-                          <TrendingDown size={12} style={{ marginRight: 4 }} />
-                          -{rec.recommended_pe_pct}%
-                        </span>
-                      </td>
-                      <td
-                        style={{
-                          padding: "0.875rem 1rem",
-                          fontFamily: "var(--font-mono)",
-                          color: "var(--text-secondary)",
-                          fontSize: "0.8rem",
-                        }}
-                      >
-                        {ceStrike ? `₹${Math.round(ceStrike).toLocaleString("en-IN")}` : "--"}
-                      </td>
-                      <td
-                        style={{
-                          padding: "0.875rem 1rem",
-                          fontFamily: "var(--font-mono)",
-                          color: "var(--text-secondary)",
-                          fontSize: "0.8rem",
-                        }}
-                      >
-                        {peStrike ? `₹${Math.round(peStrike).toLocaleString("en-IN")}` : "--"}
-                      </td>
-                      <td style={{ padding: "0.875rem 1rem" }}>
-                        <div
+                        <td
                           style={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: 8,
+                            padding: "0.875rem 1rem",
+                            fontWeight: 600,
+                            color: "var(--text-primary)",
                           }}
                         >
+                          {rec.symbol}
+                        </td>
+                        <td
+                          style={{
+                            padding: "0.875rem 1rem",
+                            fontFamily: "var(--font-mono)",
+                            color: "var(--text-secondary)",
+                          }}
+                        >
+                          {formatPrice(rec.spot_price)}
+                        </td>
+                        <td style={{ padding: "0.875rem 1rem" }}>
+                          <span className="badge badge-danger">
+                            <TrendingUp size={12} style={{ marginRight: 4 }} />
+                            +{rec.recommended_ce_pct}%
+                          </span>
+                        </td>
+                        <td style={{ padding: "0.875rem 1rem" }}>
+                          <span className="badge badge-success">
+                            <TrendingDown size={12} style={{ marginRight: 4 }} />
+                            -{rec.recommended_pe_pct}%
+                          </span>
+                        </td>
+                        <td
+                          style={{
+                            padding: "0.875rem 1rem",
+                            fontFamily: "var(--font-mono)",
+                            color: "var(--text-secondary)",
+                            fontSize: "0.8rem",
+                          }}
+                        >
+                          {ceStrike ? `₹${Math.round(ceStrike).toLocaleString("en-IN")}` : "--"}
+                        </td>
+                        <td
+                          style={{
+                            padding: "0.875rem 1rem",
+                            fontFamily: "var(--font-mono)",
+                            color: "var(--text-secondary)",
+                            fontSize: "0.8rem",
+                          }}
+                        >
+                          {peStrike ? `₹${Math.round(peStrike).toLocaleString("en-IN")}` : "--"}
+                        </td>
+                        <td style={{ padding: "0.875rem 1rem" }}>
                           <div
                             style={{
-                              width: 60,
-                              height: 6,
-                              background: "var(--bg-tertiary)",
-                              borderRadius: 3,
-                              overflow: "hidden",
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 8,
                             }}
                           >
                             <div
                               style={{
-                                width: `${(rec.combined_probability ?? 0) * 100}%`,
-                                height: "100%",
-                                background:
+                                width: 60,
+                                height: 6,
+                                background: "var(--bg-tertiary)",
+                                borderRadius: 3,
+                                overflow: "hidden",
+                              }}
+                            >
+                              <div
+                                style={{
+                                  width: `${(rec.combined_probability ?? 0) * 100}%`,
+                                  height: "100%",
+                                  background:
+                                    (rec.combined_probability ?? 0) > 0.85
+                                      ? "var(--accent-emerald)"
+                                      : "var(--accent-amber)",
+                                  borderRadius: 3,
+                                }}
+                              />
+                            </div>
+                            <span
+                              style={{
+                                fontSize: "0.8rem",
+                                fontWeight: 600,
+                                color:
                                   (rec.combined_probability ?? 0) > 0.85
                                     ? "var(--accent-emerald)"
                                     : "var(--accent-amber)",
-                                borderRadius: 3,
                               }}
-                            />
+                            >
+                              {formatPercent(rec.combined_probability)}
+                            </span>
                           </div>
-                          <span
-                            style={{
-                              fontSize: "0.8rem",
-                              fontWeight: 600,
-                              color:
-                                (rec.combined_probability ?? 0) > 0.85
-                                  ? "var(--accent-emerald)"
-                                  : "var(--accent-amber)",
-                            }}
-                          >
-                            {formatPercent(rec.combined_probability)}
-                          </span>
-                        </div>
-                      </td>
-                      <td
-                        style={{
-                          padding: "0.875rem 1rem",
-                          fontWeight: 700,
-                          color: "var(--accent-emerald)",
-                          fontFamily: "var(--font-mono)",
-                        }}
-                      >
-                        {formatPercent(rec.expected_return)}
-                      </td>
-                    </tr>
-                  );
-                })}
+                        </td>
+                        <td
+                          style={{
+                            padding: "0.875rem 1rem",
+                            fontWeight: 700,
+                            color: "var(--accent-emerald)",
+                            fontFamily: "var(--font-mono)",
+                          }}
+                        >
+                          {formatPercent(rec.expected_return)}
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
               </tbody>
             </table>
           </div>

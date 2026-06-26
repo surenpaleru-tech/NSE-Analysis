@@ -167,6 +167,28 @@ export async function fetchOpportunities(sortBy = "expected_return", limit = 20)
 }
 
 // =============================================================================
+// Alerts API
+// =============================================================================
+
+export async function fetchAlerts(isSent?: boolean, symbol?: string, limit = 50) {
+  return apiFetch<{
+    count: number;
+    alerts: {
+      id: number;
+      symbol: string;
+      alert_type: string;
+      title: string;
+      message: string;
+      channel: string;
+      is_sent: boolean;
+      created_at: string;
+    }[];
+  }>("/api/v1/alerts", {
+    params: { is_sent: isSent, symbol, limit },
+  });
+}
+
+// =============================================================================
 // Chat API
 // =============================================================================
 

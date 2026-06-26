@@ -52,14 +52,26 @@ async def get_weekly_index_recommendations(
     db: AsyncSession = Depends(get_db),
     limit: int = Query(default=20, le=100),
 ):
-    """Get weekly index option selling recommendations."""
+    """Get weekly index option selling recommendations for the latest date."""
+    # Get latest date with weekly index recommendations
+    latest_date_q = select(func.max(DailyRecommendation.date)).where(
+        DailyRecommendation.instrument_type == "index",
+        DailyRecommendation.expiry_type == "weekly",
+    )
+    latest_date_result = await db.execute(latest_date_q)
+    latest_date = latest_date_result.scalar()
+
+    if not latest_date:
+        return []
+
     query = (
         select(DailyRecommendation)
         .where(
             DailyRecommendation.instrument_type == "index",
             DailyRecommendation.expiry_type == "weekly",
+            DailyRecommendation.date == latest_date,
         )
-        .order_by(desc(DailyRecommendation.date), desc(DailyRecommendation.expected_return))
+        .order_by(desc(DailyRecommendation.expected_return))
         .limit(limit)
     )
     result = await db.execute(query)
@@ -90,14 +102,26 @@ async def get_monthly_index_recommendations(
     db: AsyncSession = Depends(get_db),
     limit: int = Query(default=20, le=100),
 ):
-    """Get monthly index option selling recommendations."""
+    """Get monthly index option selling recommendations for the latest date."""
+    # Get latest date with monthly index recommendations
+    latest_date_q = select(func.max(DailyRecommendation.date)).where(
+        DailyRecommendation.instrument_type == "index",
+        DailyRecommendation.expiry_type == "monthly",
+    )
+    latest_date_result = await db.execute(latest_date_q)
+    latest_date = latest_date_result.scalar()
+
+    if not latest_date:
+        return []
+
     query = (
         select(DailyRecommendation)
         .where(
             DailyRecommendation.instrument_type == "index",
             DailyRecommendation.expiry_type == "monthly",
+            DailyRecommendation.date == latest_date,
         )
-        .order_by(desc(DailyRecommendation.date), desc(DailyRecommendation.expected_return))
+        .order_by(desc(DailyRecommendation.expected_return))
         .limit(limit)
     )
     result = await db.execute(query)

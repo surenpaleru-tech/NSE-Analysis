@@ -4,35 +4,7 @@ import { useState, useEffect } from "react";
 import { Shield, TrendingDown, Activity, BarChart3 } from "lucide-react";
 import { fetchComparison, fetchStrategyHistory } from "../../../lib/api";
 
-// Generate sample data
-const generatePnLData = () => {
-  const data = [];
-  let cumulative = 0;
-  let peak = 0;
-  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-  for (let i = 0; i < 24; i++) {
-    const ret = parseFloat(((Math.random() - 0.28) * 3).toFixed(2));
-    cumulative = parseFloat((cumulative + ret).toFixed(2));
-    peak = Math.max(peak, cumulative);
-    data.push({
-      month: months[i % 12] + (i < 12 ? " '23" : " '24"),
-      pnl: ret,
-      cumulative,
-      drawdown: parseFloat((cumulative - peak).toFixed(2)),
-    });
-  }
-  return data;
-};
-
-const samplePnL = generatePnLData();
-
-const riskMetrics = [
-  { symbol: "NIFTY", sharpe: 1.85, sortino: 2.34, calmar: 1.62, maxDD: -4.2, winRate: 84, kelly: 0.18 },
-  { symbol: "BANKNIFTY", sharpe: 1.62, sortino: 2.01, calmar: 1.28, maxDD: -5.8, winRate: 81, kelly: 0.14 },
-  { symbol: "FINNIFTY", sharpe: 1.78, sortino: 2.20, calmar: 1.51, maxDD: -4.9, winRate: 83, kelly: 0.17 },
-  { symbol: "RELIANCE", sharpe: 1.43, sortino: 1.89, calmar: 1.12, maxDD: -7.2, winRate: 79, kelly: 0.12 },
-  { symbol: "HDFCBANK", sharpe: 1.55, sortino: 1.95, calmar: 1.23, maxDD: -6.1, winRate: 80, kelly: 0.15 },
-];
+// Risk page defaults
 
 // ─── Minimal SVG Line/Area Chart ─────────────────────────────────────────────
 function MiniChart({
@@ -112,8 +84,9 @@ function MiniBarChart({ data }: { data: any[] }) {
 // ─── Page ─────────────────────────────────────────────────────────────────────
 export default function RiskDashboardPage() {
   const [selectedSymbol, setSelectedSymbol] = useState("NIFTY");
-  const [metricsList, setMetricsList] = useState(riskMetrics);
-  const [pnlHistory, setPnlHistory] = useState<any[]>(samplePnL);
+  const [metricsList, setMetricsList] = useState<any[]>([]);
+  const [pnlHistory, setPnlHistory] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function loadComparison() {
@@ -141,6 +114,7 @@ export default function RiskDashboardPage() {
   useEffect(() => {
     async function loadHistory() {
       try {
+        setLoading(true);
         const res = await fetchStrategyHistory(selectedSymbol);
         if (res && res.results && res.results.length > 0) {
           const chronological = [...res.results].reverse();
@@ -159,7 +133,7 @@ export default function RiskDashboardPage() {
             } catch {
               // fallback to raw date
             }
-
+ 
             return {
               month: monthLabel,
               pnl: val,
@@ -168,15 +142,23 @@ export default function RiskDashboardPage() {
             };
           });
           setPnlHistory(mapped);
+        } else {
+          setPnlHistory([]);
         }
       } catch (err) {
         console.error("Failed to load historical PnL details for selected symbol:", err);
+        setPnlHistory([]);
+      } finally {
+        setLoading(false);
       }
     }
     loadHistory();
   }, [selectedSymbol]);
 
-  const selected = metricsList.find(r => r.symbol === selectedSymbol) || metricsList[0];
+  const defaultMetric = { symbol: selectedSymbol, sharpe: 0, sortino: 0, calmar: 0, maxDD: 0, winRate: 0, kelly: 0 };
+  const selected = metricsList.find(r => r.symbol === selectedSymbol) || defaultMetric;
+
+  const indices = ["NIFTY", "BANKNIFTY", "FINNIFTY", "MIDCPNIFTY", "NIFTYNXT50"];
 
   return (
     <>
@@ -191,11 +173,11 @@ export default function RiskDashboardPage() {
       <div className="page-body">
         {/* Symbol Selector */}
         <div style={{ display: "flex", gap: "0.5rem", marginBottom: "1.5rem", flexWrap: "wrap" }}>
-          {riskMetrics.map(r => (
-            <button key={r.symbol} onClick={() => setSelectedSymbol(r.symbol)}
-              className={selectedSymbol === r.symbol ? "btn btn-primary" : "btn btn-ghost"}
+          {indices.map(sym => (
+            <button key={sym} onClick={() => setSelectedSymbol(sym)}
+              className={selectedSymbol === sym ? "btn btn-primary" : "btn btn-ghost"}
               style={{ padding: "0.5rem 1rem", fontSize: "0.85rem" }}>
-              {r.symbol}
+              {sym}
             </button>
           ))}
         </div>
@@ -205,8 +187,8 @@ export default function RiskDashboardPage() {
           <RiskCard label="Sharpe Ratio" value={selected.sharpe.toFixed(2)} threshold={1.5} good="≥ 1.5 is Good" />
           <RiskCard label="Sortino Ratio" value={selected.sortino.toFixed(2)} threshold={2.0} good="≥ 2.0 is Excellent" />
           <RiskCard label="Calmar Ratio" value={selected.calmar.toFixed(2)} threshold={1.0} good="≥ 1.0 is Good" />
-          <RiskCard label="Max Drawdown" value={`${selected.maxDD}%`} isNegative={true} good="Smaller is Better" />
-          <RiskCard label="Win Rate" value={`${selected.winRate}%`} threshold={75} good="≥ 75% Target" />
+          <RiskCard label="Max Drawdown" value={`${selected.maxDD.toFixed(1)}%`} isNegative={true} good="Smaller is Better" />
+          <RiskCard label="Win Rate" value={`${selected.winRate.toFixed(0)}%`} threshold={75} good="≥ 75% Target" />
           <RiskCard label="Kelly Criterion" value={selected.kelly.toFixed(2)} threshold={0.1} good="0.1–0.25 Optimal" />
         </div>
 
@@ -218,7 +200,15 @@ export default function RiskDashboardPage() {
               Cumulative P&L — {selectedSymbol} Monthly
             </h3>
             <div style={{ height: 200 }}>
-              <MiniChart data={pnlHistory} valueKey="cumulative" color="#10b981" height={180} />
+              {loading ? (
+                <div className="skeleton" style={{ height: "100%", width: "100%" }} />
+              ) : pnlHistory.length > 0 ? (
+                <MiniChart data={pnlHistory} valueKey="cumulative" color="#10b981" height={180} />
+              ) : (
+                <div style={{ display: "flex", height: "100%", alignItems: "center", justifyContent: "center", color: "var(--text-muted)", fontSize: "0.85rem" }}>
+                  No historical P&L data.
+                </div>
+              )}
             </div>
             <div style={{ display: "flex", justifyContent: "space-between", marginTop: 8, fontSize: "0.75rem", color: "var(--text-muted)" }}>
               <span>Jan '23</span><span>Jun '23</span><span>Jan '24</span><span>Dec '24</span>
@@ -232,7 +222,15 @@ export default function RiskDashboardPage() {
               Drawdown Analysis
             </h3>
             <div style={{ height: 200 }}>
-              <MiniChart data={pnlHistory} valueKey="drawdown" color="#ef4444" height={180} />
+              {loading ? (
+                <div className="skeleton" style={{ height: "100%", width: "100%" }} />
+              ) : pnlHistory.length > 0 ? (
+                <MiniChart data={pnlHistory} valueKey="drawdown" color="#ef4444" height={180} />
+              ) : (
+                <div style={{ display: "flex", height: "100%", alignItems: "center", justifyContent: "center", color: "var(--text-muted)", fontSize: "0.85rem" }}>
+                  No drawdown data.
+                </div>
+              )}
             </div>
             <div style={{ display: "flex", justifyContent: "space-between", marginTop: 8, fontSize: "0.75rem", color: "var(--text-muted)" }}>
               <span>Jan '23</span><span>Jun '23</span><span>Jan '24</span><span>Dec '24</span>
@@ -246,7 +244,15 @@ export default function RiskDashboardPage() {
               Monthly Returns (Last 12 Months)
             </h3>
             <div style={{ height: 200 }}>
-              <MiniBarChart data={pnlHistory} />
+              {loading ? (
+                <div className="skeleton" style={{ height: "100%", width: "100%" }} />
+              ) : pnlHistory.length > 0 ? (
+                <MiniBarChart data={pnlHistory} />
+              ) : (
+                <div style={{ display: "flex", height: "100%", alignItems: "center", justifyContent: "center", color: "var(--text-muted)", fontSize: "0.85rem" }}>
+                  No monthly return data.
+                </div>
+              )}
             </div>
           </div>
 
@@ -262,17 +268,25 @@ export default function RiskDashboardPage() {
                 </tr>
               </thead>
               <tbody>
-                {riskMetrics.map(r => (
-                  <tr key={r.symbol}
-                    style={{ borderBottom: "1px solid var(--border-glass)", background: r.symbol === selectedSymbol ? "var(--bg-hover)" : "transparent", cursor: "pointer" }}
-                    onClick={() => setSelectedSymbol(r.symbol)}>
-                    <td style={{ padding: "0.6rem 0.75rem", fontWeight: 600, color: r.symbol === selectedSymbol ? "var(--accent-blue)" : "var(--text-primary)" }}>{r.symbol}</td>
-                    <td style={{ padding: "0.6rem 0.75rem", fontFamily: "var(--font-mono)", color: r.sharpe >= 1.5 ? "var(--accent-emerald)" : "var(--accent-amber)" }}>{r.sharpe.toFixed(2)}</td>
-                    <td style={{ padding: "0.6rem 0.75rem", fontFamily: "var(--font-mono)", color: r.sortino >= 2 ? "var(--accent-emerald)" : "var(--accent-amber)" }}>{r.sortino.toFixed(2)}</td>
-                    <td style={{ padding: "0.6rem 0.75rem", fontFamily: "var(--font-mono)", color: Math.abs(r.maxDD) < 5 ? "var(--accent-emerald)" : "var(--accent-red)" }}>{r.maxDD}%</td>
-                    <td style={{ padding: "0.6rem 0.75rem", fontFamily: "var(--font-mono)", color: r.winRate >= 80 ? "var(--accent-emerald)" : "var(--accent-amber)" }}>{r.winRate}%</td>
+                {metricsList.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} style={{ padding: "1rem", textAlign: "center", color: "var(--text-muted)" }}>
+                      No comparative metrics loaded.
+                    </td>
                   </tr>
-                ))}
+                ) : (
+                  metricsList.map(r => (
+                    <tr key={r.symbol}
+                      style={{ borderBottom: "1px solid var(--border-glass)", background: r.symbol === selectedSymbol ? "var(--bg-hover)" : "transparent", cursor: "pointer" }}
+                      onClick={() => setSelectedSymbol(r.symbol)}>
+                      <td style={{ padding: "0.6rem 0.75rem", fontWeight: 600, color: r.symbol === selectedSymbol ? "var(--accent-blue)" : "var(--text-primary)" }}>{r.symbol}</td>
+                      <td style={{ padding: "0.6rem 0.75rem", fontFamily: "var(--font-mono)", color: r.sharpe >= 1.5 ? "var(--accent-emerald)" : "var(--accent-amber)" }}>{r.sharpe.toFixed(2)}</td>
+                      <td style={{ padding: "0.6rem 0.75rem", fontFamily: "var(--font-mono)", color: r.sortino >= 2 ? "var(--accent-emerald)" : "var(--accent-amber)" }}>{r.sortino.toFixed(2)}</td>
+                      <td style={{ padding: "0.6rem 0.75rem", fontFamily: "var(--font-mono)", color: Math.abs(r.maxDD) < 5 ? "var(--accent-emerald)" : "var(--accent-red)" }}>{r.maxDD.toFixed(1)}%</td>
+                      <td style={{ padding: "0.6rem 0.75rem", fontFamily: "var(--font-mono)", color: r.winRate >= 80 ? "var(--accent-emerald)" : "var(--accent-amber)" }}>{r.winRate.toFixed(0)}%</td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>
