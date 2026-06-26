@@ -5,11 +5,12 @@ Database engine, session factory, and base model for SQLAlchemy 2.0 async.
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
 
+from typing import Any
 from app.config import get_settings
 
 settings = get_settings()
 
-connect_args = {"statement_cache_size": 0}
+connect_args: dict[str, Any] = {"statement_cache_size": 0}
 
 # Enable SSL for remote connections (Supabase/Render Postgres)
 db_url_lower = settings.database_url.lower()
