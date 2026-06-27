@@ -87,19 +87,19 @@ async def db_tcs():
         from sqlalchemy import text
         async with async_session_factory() as session:
             res = await session.execute(
-                text("SELECT date, close FROM spot_prices WHERE symbol = 'TCS' ORDER BY date DESC LIMIT 30;")
+                text("SELECT DISTINCT trade_date, underlying_price FROM option_chain WHERE symbol = 'TCS' ORDER BY trade_date DESC LIMIT 30;")
             )
-            spot_rows = [{"date": str(row[0]), "close": float(row[1]) if row[1] is not None else None} for row in res.all()]
+            spot_rows = [{"date": str(row[0]), "underlying_price": float(row[1]) if row[1] is not None else None} for row in res.all()]
             
             # Get count
             cnt_res = await session.execute(
-                text("SELECT COUNT(*) FROM spot_prices WHERE symbol = 'TCS';")
+                text("SELECT COUNT(DISTINCT trade_date) FROM option_chain WHERE symbol = 'TCS';")
             )
             count = cnt_res.scalar()
             
         return {
             "symbol": "TCS",
-            "total_records": count,
+            "total_distinct_dates_in_oc": count,
             "records": spot_rows
         }
     except Exception as e:
