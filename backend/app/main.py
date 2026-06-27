@@ -79,6 +79,33 @@ async def health_check():
 
 
 
+
+@app.get("/api/db-tcs", tags=["Health"])
+async def db_tcs():
+    from app.core.database import async_session_factory
+    from app.models import SpotPrice
+    async with async_session_factory() as session:
+        res = await session.execute(
+            select(SpotPrice.date, SpotPrice.close)
+            .where(SpotPrice.symbol == "TCS")
+            .order_by(desc(SpotPrice.date))
+            .limit(30)
+        )
+        spot_rows = [{"date": str(row[0]), "close": float(row[1])} for row in res.all()]
+        
+        # Get count
+        cnt_res = await session.execute(
+            select(func.count()).where(SpotPrice.symbol == "TCS")
+        )
+        count = cnt_res.scalar()
+        
+    return {
+        "symbol": "TCS",
+        "total_records": count,
+        "records": spot_rows
+    }
+
+
 @app.get("/", tags=["Root"])
 async def root():
     """Root endpoint with API information."""
