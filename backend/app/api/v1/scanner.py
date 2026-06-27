@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, desc, func
 
 from app.core.database import get_db
-from app.models import DailyRecommendation
+from app.models import DailyRecommendation, OptionChain
 
 router = APIRouter()
 
@@ -19,7 +19,7 @@ async def get_top_opportunities(
         default="expected_return",
         enum=["expected_return", "combined_probability", "risk_score"],
     ),
-    limit: int = Query(default=20, le=50),
+    limit: int = Query(default=250, le=1000),
 ):
     """Get top opportunities ranked by selected metric."""
     # Get latest date with recommendations
@@ -45,6 +45,21 @@ async def get_top_opportunities(
     result = await db.execute(query)
     recs = result.scalars().all()
 
+    # Load all option chain close prices for latest_date into memory
+    oc_q = select(
+        OptionChain.symbol,
+        OptionChain.strike,
+        OptionChain.option_type,
+        OptionChain.close
+    ).where(OptionChain.trade_date == latest_date)
+    oc_res = await db.execute(oc_q)
+    
+    # Build lookup map: (symbol, strike_float, option_type) -> close_premium
+    premium_map = {}
+    for row in oc_res.all():
+        sym, strike, opt_type, close = row
+        premium_map[(sym, float(strike), opt_type)] = float(close) if close is not None else None
+
     return {
         "date": str(latest_date),
         "sort_by": sort_by,
@@ -59,6 +74,8 @@ async def get_top_opportunities(
                 "recommended_pe_pct": float(r.recommended_pe_pct) if r.recommended_pe_pct else None,
                 "recommended_ce_strike": float(r.recommended_ce_strike) if r.recommended_ce_strike else None,
                 "recommended_pe_strike": float(r.recommended_pe_strike) if r.recommended_pe_strike else None,
+                "ce_premium": premium_map.get((r.symbol, float(r.recommended_ce_strike), "CE")) if r.recommended_ce_strike else None,
+                "pe_premium": premium_map.get((r.symbol, float(r.recommended_pe_strike), "PE")) if r.recommended_pe_strike else None,
                 "combined_probability": float(r.combined_probability) if r.combined_probability else None,
                 "expected_return": float(r.expected_return) if r.expected_return else None,
                 "risk_score": float(r.risk_score) if r.risk_score else None,

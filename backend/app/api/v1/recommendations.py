@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, desc, func
 
 from app.core.database import get_db
-from app.models import DailyRecommendation
+from app.models import DailyRecommendation, OptionChain
 
 router = APIRouter()
 
@@ -40,6 +40,21 @@ async def get_today_recommendations(
     result = await db.execute(query)
     recs = result.scalars().all()
 
+    # Load all option chain close prices for latest_date into memory
+    oc_q = select(
+        OptionChain.symbol,
+        OptionChain.strike,
+        OptionChain.option_type,
+        OptionChain.close
+    ).where(OptionChain.trade_date == latest_date)
+    oc_res = await db.execute(oc_q)
+    
+    # Build lookup map: (symbol, strike_float, option_type) -> close_premium
+    premium_map = {}
+    for row in oc_res.all():
+        sym, strike, opt_type, close = row
+        premium_map[(sym, float(strike), opt_type)] = float(close) if close is not None else None
+
     return {
         "date": str(latest_date),
         "count": len(recs),
@@ -53,6 +68,8 @@ async def get_today_recommendations(
                 "recommended_pe_pct": float(r.recommended_pe_pct) if r.recommended_pe_pct else None,
                 "recommended_ce_strike": float(r.recommended_ce_strike) if r.recommended_ce_strike else None,
                 "recommended_pe_strike": float(r.recommended_pe_strike) if r.recommended_pe_strike else None,
+                "ce_premium": premium_map.get((r.symbol, float(r.recommended_ce_strike), "CE")) if r.recommended_ce_strike else None,
+                "pe_premium": premium_map.get((r.symbol, float(r.recommended_pe_strike), "PE")) if r.recommended_pe_strike else None,
                 "ce_probability": float(r.ce_probability) if r.ce_probability else None,
                 "pe_probability": float(r.pe_probability) if r.pe_probability else None,
                 "combined_probability": float(r.combined_probability) if r.combined_probability else None,

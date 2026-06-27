@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Zap, TrendingUp, TrendingDown, Filter, Search, X } from "lucide-react";
+import { Zap, TrendingUp, TrendingDown, Filter, Search, X, ArrowRight, DollarSign } from "lucide-react";
 import { fetchOpportunities, fetchStrategyHistory } from "../../../lib/api";
 
 export default function ScannerPage() {
@@ -30,6 +30,10 @@ export default function ScannerPage() {
             spot: o.spot_price ?? 0,
             ce_pct: o.recommended_ce_pct ?? 0,
             pe_pct: o.recommended_pe_pct ?? 0,
+            ce_strike: o.recommended_ce_strike ?? 0,
+            pe_strike: o.recommended_pe_strike ?? 0,
+            ce_premium: o.ce_premium ?? null,
+            pe_premium: o.pe_premium ?? null,
             probability: o.combined_probability ?? 0,
             expected_return: o.expected_return ?? 0,
             risk_score: o.risk_score ?? 0,
@@ -248,12 +252,12 @@ export default function ScannerPage() {
             </div>
           </div>
 
-          {/* Right sticky backtest panel */}
+          {/* Right sticky backtest panel — Wider and filled */}
           {selectedOpp && (
             <div
               className="glass-card animate-fade-in"
               style={{
-                flex: "0 0 42%",
+                flex: "0 0 48%",
                 position: "sticky",
                 top: "20px",
                 maxHeight: "calc(100vh - 120px)",
@@ -261,16 +265,16 @@ export default function ScannerPage() {
                 flexDirection: "column",
                 padding: "1.5rem",
                 border: "1px solid var(--border-accent)",
-                boxShadow: "var(--shadow-md)"
+                boxShadow: "var(--shadow-lg)"
               }}
             >
               {/* Header */}
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "1.25rem" }}>
                 <div>
-                  <h2 style={{ fontSize: "1.3rem", fontWeight: 800, color: "var(--text-primary)" }}>
+                  <h2 style={{ fontSize: "1.45rem", fontWeight: 800, color: "var(--text-primary)" }}>
                     {selectedOpp.symbol} Backtest
                   </h2>
-                  <p style={{ fontSize: "0.8rem", color: "var(--text-muted)", marginTop: 2 }}>
+                  <p style={{ fontSize: "0.85rem", color: "var(--text-muted)", marginTop: 2 }}>
                     {selectedOpp.expiry === "weekly" ? "Weekly" : "Monthly"} Option Selling History
                   </p>
                 </div>
@@ -280,8 +284,8 @@ export default function ScannerPage() {
                     background: "rgba(255,255,255,0.05)",
                     border: "none",
                     borderRadius: "50%",
-                    width: 28,
-                    height: 28,
+                    width: 32,
+                    height: 32,
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
@@ -292,38 +296,80 @@ export default function ScannerPage() {
                   onMouseEnter={(e) => e.currentTarget.style.background = "rgba(255,255,255,0.1)"}
                   onMouseLeave={(e) => e.currentTarget.style.background = "rgba(255,255,255,0.05)"}
                 >
-                  <X size={14} />
+                  <X size={16} />
                 </button>
-              </div>
-
-              {/* Backtest Parameters */}
-              <div style={{ display: "flex", gap: "1rem", marginBottom: "1.25rem", paddingBottom: "1.25rem", borderBottom: "1px solid var(--border-primary)" }}>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: "0.7rem", color: "var(--text-muted)", textTransform: "uppercase" }}>CE Sell Strike</div>
-                  <div style={{ fontSize: "0.95rem", fontWeight: 600, color: "var(--text-secondary)", marginTop: 2 }}>
-                    +{selectedOpp.ce_pct}% (Strike: {Math.round(selectedOpp.spot * (1 + selectedOpp.ce_pct/100))})
-                  </div>
-                </div>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: "0.7rem", color: "var(--text-muted)", textTransform: "uppercase" }}>PE Sell Strike</div>
-                  <div style={{ fontSize: "0.95rem", fontWeight: 600, color: "var(--text-secondary)", marginTop: 2 }}>
-                    -{selectedOpp.pe_pct}% (Strike: {Math.round(selectedOpp.spot * (1 - selectedOpp.pe_pct/100))})
-                  </div>
-                </div>
               </div>
 
               {/* Data Content */}
               {historyLoading ? (
                 <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "1rem", justifyContent: "center" }}>
-                  <div className="skeleton" style={{ height: 60, borderRadius: "var(--radius-md)" }} />
-                  <div className="skeleton" style={{ height: 120, borderRadius: "var(--radius-md)" }} />
-                </div>
-              ) : history.length === 0 ? (
-                <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "2rem", color: "var(--text-muted)", textAlign: "center" }}>
-                  <p style={{ fontSize: "0.9rem" }}>No backtest strategy results found for this specific CE/PE percentage combination.</p>
+                  <div className="skeleton" style={{ height: 100, borderRadius: "var(--radius-lg)" }} />
+                  <div className="skeleton" style={{ height: 180, borderRadius: "var(--radius-lg)" }} />
                 </div>
               ) : (
                 <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+                  
+                  {/* Suggested Option Trades Card (actionable information based on starting spot value) */}
+                  <div style={{
+                    background: "linear-gradient(135deg, rgba(59, 130, 246, 0.08), rgba(139, 92, 246, 0.08))",
+                    border: "1px solid rgba(59, 130, 246, 0.2)",
+                    borderRadius: "var(--radius-lg)",
+                    padding: "1.25rem",
+                    marginBottom: "1.25rem"
+                  }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.75rem" }}>
+                      <DollarSign size={16} style={{ color: "var(--accent-blue)" }} />
+                      <span style={{ fontSize: "0.85rem", fontWeight: 700, color: "var(--text-primary)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                        Suggested Option Trades (Current Expiry)
+                      </span>
+                    </div>
+
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem", background: "rgba(0,0,0,0.2)", padding: "0.5rem 0.75rem", borderRadius: "var(--radius-sm)" }}>
+                      <span style={{ fontSize: "0.75rem", color: "var(--text-secondary)" }}>Month Starting Spot:</span>
+                      <span style={{ fontSize: "0.9rem", fontWeight: 700, fontFamily: "var(--font-mono)", color: "var(--text-primary)" }}>
+                        ₹{selectedOpp.spot.toLocaleString("en-IN")}
+                      </span>
+                    </div>
+
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
+                      
+                      {/* CE option trade */}
+                      <div style={{ background: "rgba(239, 68, 68, 0.05)", border: "1px solid rgba(239, 68, 68, 0.15)", padding: "0.75rem", borderRadius: "var(--radius-md)" }}>
+                        <div style={{ fontSize: "0.65rem", color: "var(--text-muted)", textTransform: "uppercase", fontWeight: 600 }}>Sell CE Option</div>
+                        <div style={{ fontSize: "0.95rem", fontWeight: 700, color: "var(--accent-red)", fontFamily: "var(--font-mono)", marginTop: 2 }}>
+                          {selectedOpp.ce_strike ? selectedOpp.ce_strike.toLocaleString("en-IN") : Math.round(selectedOpp.spot * (1 + selectedOpp.ce_pct/100))} CE
+                        </div>
+                        <div style={{ fontSize: "0.65rem", color: "var(--text-secondary)", marginTop: 1 }}>
+                          (Suggested +{selectedOpp.ce_pct}%)
+                        </div>
+                        <div style={{ borderTop: "1px dashed rgba(239, 68, 68, 0.15)", marginTop: 8, paddingTop: 6, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                          <span style={{ fontSize: "0.65rem", color: "var(--text-muted)" }}>Current Val:</span>
+                          <span style={{ fontSize: "0.85rem", fontWeight: 700, fontFamily: "var(--font-mono)", color: "var(--text-primary)" }}>
+                            {selectedOpp.ce_premium !== null ? `₹${selectedOpp.ce_premium.toFixed(2)}` : "₹0.00"}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* PE option trade */}
+                      <div style={{ background: "rgba(16, 185, 129, 0.05)", border: "1px solid rgba(16, 185, 129, 0.15)", padding: "0.75rem", borderRadius: "var(--radius-md)" }}>
+                        <div style={{ fontSize: "0.65rem", color: "var(--text-muted)", textTransform: "uppercase", fontWeight: 600 }}>Sell PE Option</div>
+                        <div style={{ fontSize: "0.95rem", fontWeight: 700, color: "var(--accent-emerald)", fontFamily: "var(--font-mono)", marginTop: 2 }}>
+                          {selectedOpp.pe_strike ? selectedOpp.pe_strike.toLocaleString("en-IN") : Math.round(selectedOpp.spot * (1 - selectedOpp.pe_pct/100))} PE
+                        </div>
+                        <div style={{ fontSize: "0.65rem", color: "var(--text-secondary)", marginTop: 1 }}>
+                          (Suggested -{selectedOpp.pe_pct}%)
+                        </div>
+                        <div style={{ borderTop: "1px dashed rgba(16, 185, 129, 0.15)", marginTop: 8, paddingTop: 6, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                          <span style={{ fontSize: "0.65rem", color: "var(--text-muted)" }}>Current Val:</span>
+                          <span style={{ fontSize: "0.85rem", fontWeight: 700, fontFamily: "var(--font-mono)", color: "var(--text-primary)" }}>
+                            {selectedOpp.pe_premium !== null ? `₹${selectedOpp.pe_premium.toFixed(2)}` : "₹0.00"}
+                          </span>
+                        </div>
+                      </div>
+                      
+                    </div>
+                  </div>
+
                   {/* Summary performance card */}
                   <div style={{
                     display: "grid",
@@ -337,7 +383,7 @@ export default function ScannerPage() {
                     <div>
                       <div style={{ fontSize: "0.7rem", color: "var(--text-muted)", textTransform: "uppercase" }}>Win Rate</div>
                       <div style={{ fontSize: "1.3rem", fontWeight: 800, color: "var(--accent-emerald)", marginTop: 2 }}>
-                        {((history.filter(h => h.ce_expired_worthless && h.pe_expired_worthless).length / history.length) * 100).toFixed(0)}%
+                        {history.length > 0 ? ((history.filter(h => h.ce_expired_worthless && h.pe_expired_worthless).length / history.length) * 100).toFixed(0) : "0"}%
                       </div>
                       <div style={{ fontSize: "0.65rem", color: "var(--text-muted)", marginTop: 1 }}>
                         {history.filter(h => h.ce_expired_worthless && h.pe_expired_worthless).length} / {history.length} Expiries Worthless
@@ -346,50 +392,57 @@ export default function ScannerPage() {
                     <div>
                       <div style={{ fontSize: "0.7rem", color: "var(--text-muted)", textTransform: "uppercase" }}>Avg Return</div>
                       <div style={{ fontSize: "1.3rem", fontWeight: 800, color: "var(--accent-blue)", marginTop: 2 }}>
-                        {(history.reduce((acc, h) => acc + (h.return_pct ?? 0), 0) / history.length).toFixed(2)}%
+                        {history.length > 0 ? (history.reduce((acc, h) => acc + (h.return_pct ?? 0), 0) / history.length).toFixed(2) : "0.00"}%
                       </div>
                       <div style={{ fontSize: "0.65rem", color: "var(--text-muted)", marginTop: 1 }}>
-                        Expected P&L: {(history.reduce((acc, h) => acc + (h.total_pnl ?? 0), 0) / history.length).toFixed(1)} pts
+                        Expected P&L: {history.length > 0 ? (history.reduce((acc, h) => acc + (h.total_pnl ?? 0), 0) / history.length).toFixed(1) : "0.0"} pts
                       </div>
                     </div>
                   </div>
 
                   {/* Scrollable Backtest Table */}
                   <div style={{ flex: 1, overflowY: "auto", paddingRight: "0.25rem" }}>
-                    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.85rem", textAlign: "left" }}>
-                      <thead>
-                        <tr style={{ borderBottom: "1px solid var(--border-primary)", color: "var(--text-muted)" }}>
-                          <th style={{ padding: "0.5rem", fontWeight: 600 }}>Expiry</th>
-                          <th style={{ padding: "0.5rem", textAlign: "right", fontWeight: 600 }}>Spot (Entry → Expiry)</th>
-                          <th style={{ padding: "0.5rem", textAlign: "right", fontWeight: 600 }}>Return %</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {history.map((record, index) => {
-                          const isWin = record.ce_expired_worthless && record.pe_expired_worthless;
-                          return (
-                            <tr key={index} style={{ borderBottom: "1px solid rgba(255, 255, 255, 0.04)" }}>
-                              <td style={{ padding: "0.75rem 0.5rem", color: "var(--text-secondary)", fontWeight: 500 }}>
-                                {new Date(record.expiry).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}
-                              </td>
-                              <td style={{ padding: "0.75rem 0.5rem", textAlign: "right", fontFamily: "var(--font-mono)", color: "var(--text-secondary)" }}>
-                                {record.spot_at_entry?.toFixed(0)} → {record.spot_at_expiry?.toFixed(0)}
-                              </td>
-                              <td style={{
-                                padding: "0.75rem 0.5rem",
-                                textAlign: "right",
-                                fontFamily: "var(--font-mono)",
-                                fontWeight: 700,
-                                color: (record.return_pct ?? 0) >= 0 ? "var(--accent-emerald)" : "var(--accent-red)"
-                              }}>
-                                {(record.return_pct ?? 0) >= 0 ? "+" : ""}{(record.return_pct ?? 0).toFixed(1)}%
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
+                    {history.length === 0 ? (
+                      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "2rem", color: "var(--text-muted)", textAlign: "center" }}>
+                        <p style={{ fontSize: "0.9rem" }}>No backtest strategy results found for this specific CE/PE percentage combination.</p>
+                      </div>
+                    ) : (
+                      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.85rem", textAlign: "left" }}>
+                        <thead>
+                          <tr style={{ borderBottom: "1px solid var(--border-primary)", color: "var(--text-muted)" }}>
+                            <th style={{ padding: "0.5rem", fontWeight: 600 }}>Expiry</th>
+                            <th style={{ padding: "0.5rem", textAlign: "right", fontWeight: 600 }}>Spot (Entry → Expiry)</th>
+                            <th style={{ padding: "0.5rem", textAlign: "right", fontWeight: 600 }}>Return %</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {history.map((record, index) => {
+                            return (
+                              <tr key={index} style={{ borderBottom: "1px solid rgba(255, 255, 255, 0.04)" }}>
+                                <td style={{ padding: "0.75rem 0.5rem", color: "var(--text-secondary)", fontWeight: 500 }}>
+                                  {new Date(record.expiry).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}
+                                </td>
+                                <td style={{ padding: "0.75rem 0.5rem", textAlign: "right", fontFamily: "var(--font-mono)", color: "var(--text-secondary)" }}>
+                                  {record.spot_at_entry?.toFixed(0)} → {record.spot_at_expiry?.toFixed(0)}
+                                </td>
+                                <td style={{
+                                  padding: "0.75rem 0.5rem",
+                                  alignItems: "center",
+                                  textAlign: "right",
+                                  fontFamily: "var(--font-mono)",
+                                  fontWeight: 700,
+                                  color: (record.return_pct ?? 0) >= 0 ? "var(--accent-emerald)" : "var(--accent-red)"
+                                }}>
+                                  {(record.return_pct ?? 0) >= 0 ? "+" : ""}{(record.return_pct ?? 0).toFixed(1)}%
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    )}
                   </div>
+                  
                 </div>
               )}
             </div>

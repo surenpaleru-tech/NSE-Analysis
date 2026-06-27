@@ -157,7 +157,7 @@ export async function fetchComparison(symbols: string, expiryType = "monthly") {
 // Scanner API
 // =============================================================================
 
-export async function fetchOpportunities(sortBy = "expected_return", limit = 20) {
+export async function fetchOpportunities(sortBy = "expected_return", limit = 250) {
   return apiFetch<{
     date: string;
     opportunities: Opportunity[];
@@ -284,6 +284,10 @@ export interface Opportunity {
   spot_price: number | null;
   recommended_ce_pct: number | null;
   recommended_pe_pct: number | null;
+  recommended_ce_strike: number | null;
+  recommended_pe_strike: number | null;
+  ce_premium: number | null;
+  pe_premium: number | null;
   combined_probability: number | null;
   expected_return: number | null;
   risk_score: number | null;
