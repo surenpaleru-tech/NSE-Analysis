@@ -79,34 +79,6 @@ async def health_check():
 
 
 
-@app.get("/api/db-symbols", tags=["Health"])
-async def db_symbols():
-    from app.core.database import async_session_factory
-    from sqlalchemy import text
-    async with async_session_factory() as session:
-        # Get distinct symbols in fno_universe
-        fno_res = await session.execute(text("SELECT DISTINCT symbol FROM fno_universe ORDER BY symbol;"))
-        fno_symbols = [row[0] for row in fno_res.all()]
-        
-        # Get distinct symbols in option_chain
-        oc_res = await session.execute(text("SELECT DISTINCT symbol FROM option_chain ORDER BY symbol;"))
-        oc_symbols = [row[0] for row in oc_res.all()]
-        
-        # Get distinct symbols in spot_prices
-        spot_res = await session.execute(text("SELECT DISTINCT symbol FROM spot_prices ORDER BY symbol;"))
-        spot_symbols = [row[0] for row in spot_res.all()]
-        
-    return {
-        "fno_universe": fno_symbols,
-        "option_chain_count": len(oc_symbols),
-        "option_chain_samples": oc_symbols[:10],
-        "spot_prices_count": len(spot_symbols),
-        "spot_prices_samples": spot_symbols[:10],
-        "nifty_in_oc": "NIFTY" in oc_symbols,
-        "nifty_in_spot": "NIFTY" in spot_symbols,
-    }
-
-
 @app.get("/", tags=["Root"])
 async def root():
     """Root endpoint with API information."""

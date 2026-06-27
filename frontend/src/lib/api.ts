@@ -65,7 +65,7 @@ export async function fetchMonthlyIndex(limit = 20) {
   });
 }
 
-export async function fetchStockRecommendations(sortBy = "expected_return", limit = 50) {
+export async function fetchStockRecommendations(sortBy = "expected_return", limit = 200) {
   return apiFetch<RankedRecommendation[]>("/api/v1/dashboard/stocks", {
     params: { sort_by: sortBy, limit },
   });

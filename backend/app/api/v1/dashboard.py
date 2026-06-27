@@ -149,7 +149,7 @@ async def get_monthly_index_recommendations(
 async def get_stock_recommendations(
     db: AsyncSession = Depends(get_db),
     sort_by: str = Query(default="expected_return", enum=["expected_return", "combined_probability", "risk_score"]),
-    limit: int = Query(default=50, le=200),
+    limit: int = Query(default=200, le=1000),
 ):
     """Get stock monthly option selling recommendations, ranked."""
     order_col = {
