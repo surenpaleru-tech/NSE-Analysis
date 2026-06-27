@@ -78,33 +78,6 @@ async def health_check():
     }
 
 
-
-
-
-@app.get("/api/db-all-tables", tags=["Health"])
-async def db_all_tables():
-    from app.core.database import async_session_factory
-    from sqlalchemy import text
-    tables = {}
-    async with async_session_factory() as session:
-        # Get list of all tables in public schema
-        result = await session.execute(text(
-            "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public';"
-        ))
-        table_names = [row[0] for row in result.all()]
-        
-        for table in table_names:
-            try:
-                count_res = await session.execute(text(f"SELECT COUNT(*) FROM \"{table}\";"))
-                tables[table] = count_res.scalar()
-            except Exception as e:
-                tables[table] = f"Error: {e}"
-                
-    return {
-        "tables": tables
-    }
-
-
 @app.get("/", tags=["Root"])
 async def root():
     """Root endpoint with API information."""
