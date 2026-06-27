@@ -77,35 +77,6 @@ async def health_check():
         "service": "nse-options-intelligence",
     }
 
-
-
-
-@app.get("/api/db-tcs", tags=["Health"])
-async def db_tcs():
-    try:
-        from app.core.database import async_session_factory
-        from sqlalchemy import text
-        async with async_session_factory() as session:
-            res = await session.execute(
-                text("SELECT DISTINCT trade_date, underlying_price FROM option_chain WHERE symbol = 'TCS' ORDER BY trade_date DESC LIMIT 30;")
-            )
-            spot_rows = [{"date": str(row[0]), "underlying_price": float(row[1]) if row[1] is not None else None} for row in res.all()]
-            
-            # Get count
-            cnt_res = await session.execute(
-                text("SELECT COUNT(DISTINCT trade_date) FROM option_chain WHERE symbol = 'TCS';")
-            )
-            count = cnt_res.scalar()
-            
-        return {
-            "symbol": "TCS",
-            "total_distinct_dates_in_oc": count,
-            "records": spot_rows
-        }
-    except Exception as e:
-        return {"error": str(e)}
-
-
 @app.get("/", tags=["Root"])
 async def root():
     """Root endpoint with API information."""
