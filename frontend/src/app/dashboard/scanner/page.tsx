@@ -15,6 +15,10 @@ export default function ScannerPage() {
   const [selectedOpp, setSelectedOpp] = useState<any | null>(null);
   const [history, setHistory] = useState<any[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
+  
+  // Expiries (ongoing vs next month) tab states
+  const [expiriesInfo, setExpiriesInfo] = useState<any | null>(null);
+  const [activeExpiryTab, setActiveExpiryTab] = useState<"ongoing" | "next">("ongoing");
 
   useEffect(() => {
     async function loadData() {
@@ -55,10 +59,16 @@ export default function ScannerPage() {
     setSelectedOpp(null);
   }, [sortBy, typeFilter]);
 
-  // Fetch backtest results when symbol is selected
+  // Reset active tab to ongoing when selection changes
+  useEffect(() => {
+    setActiveExpiryTab("ongoing");
+  }, [selectedOpp]);
+
+  // Fetch backtest results & multi-expiry premiums when symbol is selected
   useEffect(() => {
     if (!selectedOpp) {
       setHistory([]);
+      setExpiriesInfo(null);
       return;
     }
     async function loadHistory() {
@@ -70,14 +80,17 @@ export default function ScannerPage() {
           selectedOpp.ce_pct,
           selectedOpp.pe_pct
         );
-        if (res && res.results) {
-          setHistory(res.results);
+        if (res) {
+          setHistory(res.results || []);
+          setExpiriesInfo(res.expiries_info || null);
         } else {
           setHistory([]);
+          setExpiriesInfo(null);
         }
       } catch (err) {
         console.error("Failed to load strategy history:", err);
         setHistory([]);
+        setExpiriesInfo(null);
       } finally {
         setHistoryLoading(false);
       }
@@ -88,6 +101,9 @@ export default function ScannerPage() {
   const filtered = opportunities
     .filter(o => typeFilter === "all" || o.type === typeFilter)
     .filter(o => o.symbol.toLowerCase().includes(searchQuery.toLowerCase()));
+
+  // Retrieve active tab's calculated strikes and premiums (LTP)
+  const activeExpiryData = expiriesInfo ? expiriesInfo[activeExpiryTab] : null;
 
   return (
     <>
@@ -255,7 +271,7 @@ export default function ScannerPage() {
           {/* Right sticky backtest panel — Wider and filled */}
           {selectedOpp && (
             <div
-              className="glass-card animate-fade-in"
+              className="glass-card animate-slide-in"
               style={{
                 flex: "0 0 48%",
                 position: "sticky",
@@ -269,13 +285,13 @@ export default function ScannerPage() {
               }}
             >
               {/* Header */}
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "1.25rem" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "1rem" }}>
                 <div>
                   <h2 style={{ fontSize: "1.45rem", fontWeight: 800, color: "var(--text-primary)" }}>
                     {selectedOpp.symbol} Backtest
                   </h2>
                   <p style={{ fontSize: "0.85rem", color: "var(--text-muted)", marginTop: 2 }}>
-                    {selectedOpp.expiry === "weekly" ? "Weekly" : "Monthly"} Option Selling History
+                    {activeExpiryData ? `${activeExpiryData.expiry_month} Expiry (${activeExpiryData.expiry_label})` : (selectedOpp.expiry === "weekly" ? "Weekly" : "Monthly")} Option Selling
                   </p>
                 </div>
                 <button
@@ -300,16 +316,58 @@ export default function ScannerPage() {
                 </button>
               </div>
 
+              {/* Expiry Selector Tabs */}
+              {expiriesInfo && (
+                <div style={{ display: "flex", borderBottom: "1px solid var(--border-primary)", marginBottom: "1.25rem", gap: "0.5rem" }}>
+                  {expiriesInfo.ongoing && (
+                    <button
+                      onClick={() => setActiveExpiryTab("ongoing")}
+                      style={{
+                        padding: "0.5rem 1rem",
+                        background: "none",
+                        border: "none",
+                        borderBottom: activeExpiryTab === "ongoing" ? "3px solid var(--accent-blue)" : "3px solid transparent",
+                        color: activeExpiryTab === "ongoing" ? "var(--text-primary)" : "var(--text-muted)",
+                        fontWeight: activeExpiryTab === "ongoing" ? 700 : 500,
+                        cursor: "pointer",
+                        fontSize: "0.85rem",
+                        transition: "all var(--transition-fast)"
+                      }}
+                    >
+                      {expiriesInfo.ongoing.expiry_month} Expiry ({expiriesInfo.ongoing.expiry_label})
+                    </button>
+                  )}
+                  {expiriesInfo.next && (
+                    <button
+                      onClick={() => setActiveExpiryTab("next")}
+                      style={{
+                        padding: "0.5rem 1rem",
+                        background: "none",
+                        border: "none",
+                        borderBottom: activeExpiryTab === "next" ? "3px solid var(--accent-blue)" : "3px solid transparent",
+                        color: activeExpiryTab === "next" ? "var(--text-primary)" : "var(--text-muted)",
+                        fontWeight: activeExpiryTab === "next" ? 700 : 500,
+                        cursor: "pointer",
+                        fontSize: "0.85rem",
+                        transition: "all var(--transition-fast)"
+                      }}
+                    >
+                      {expiriesInfo.next.expiry_month} Expiry ({expiriesInfo.next.expiry_label})
+                    </button>
+                  )}
+                </div>
+              )}
+
               {/* Data Content */}
               {historyLoading ? (
-                <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "1rem", justifyContent: "center" }}>
-                  <div className="skeleton" style={{ height: 100, borderRadius: "var(--radius-lg)" }} />
+                <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "1.5rem", justifyContent: "center" }}>
+                  <div className="skeleton" style={{ height: 120, borderRadius: "var(--radius-lg)" }} />
                   <div className="skeleton" style={{ height: 180, borderRadius: "var(--radius-lg)" }} />
                 </div>
               ) : (
                 <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
                   
-                  {/* Suggested Option Trades Card (actionable information based on starting spot value) */}
+                  {/* Suggested Option Trades Card (actionable option info) */}
                   <div style={{
                     background: "linear-gradient(135deg, rgba(59, 130, 246, 0.08), rgba(139, 92, 246, 0.08))",
                     border: "1px solid rgba(59, 130, 246, 0.2)",
@@ -320,14 +378,16 @@ export default function ScannerPage() {
                     <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.75rem" }}>
                       <DollarSign size={16} style={{ color: "var(--accent-blue)" }} />
                       <span style={{ fontSize: "0.85rem", fontWeight: 700, color: "var(--text-primary)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                        Suggested Option Trades (Current Expiry)
+                        Suggested Option Trades
                       </span>
                     </div>
 
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem", background: "rgba(0,0,0,0.2)", padding: "0.5rem 0.75rem", borderRadius: "var(--radius-sm)" }}>
-                      <span style={{ fontSize: "0.75rem", color: "var(--text-secondary)" }}>Month Starting Spot:</span>
-                      <span style={{ fontSize: "0.9rem", fontWeight: 700, fontFamily: "var(--font-mono)", color: "var(--text-primary)" }}>
-                        ₹{selectedOpp.spot.toLocaleString("en-IN")}
+                      <span style={{ fontSize: "0.75rem", color: "var(--text-secondary)" }}>
+                        {activeExpiryTab === "ongoing" ? "Current" : "Next"} Spot LTP:
+                      </span>
+                      <span style={{ fontSize: "0.95rem", fontWeight: 700, fontFamily: "var(--font-mono)", color: "var(--text-primary)" }}>
+                        ₹{activeExpiryData ? activeExpiryData.spot.toLocaleString("en-IN") : selectedOpp.spot.toLocaleString("en-IN")}
                       </span>
                     </div>
 
@@ -337,15 +397,17 @@ export default function ScannerPage() {
                       <div style={{ background: "rgba(239, 68, 68, 0.05)", border: "1px solid rgba(239, 68, 68, 0.15)", padding: "0.75rem", borderRadius: "var(--radius-md)" }}>
                         <div style={{ fontSize: "0.65rem", color: "var(--text-muted)", textTransform: "uppercase", fontWeight: 600 }}>Sell CE Option</div>
                         <div style={{ fontSize: "0.95rem", fontWeight: 700, color: "var(--accent-red)", fontFamily: "var(--font-mono)", marginTop: 2 }}>
-                          {selectedOpp.ce_strike ? selectedOpp.ce_strike.toLocaleString("en-IN") : Math.round(selectedOpp.spot * (1 + selectedOpp.ce_pct/100))} CE
+                          {activeExpiryData?.ce_strike ? activeExpiryData.ce_strike.toLocaleString("en-IN") : Math.round(selectedOpp.spot * (1 + selectedOpp.ce_pct/100))} CE
                         </div>
                         <div style={{ fontSize: "0.65rem", color: "var(--text-secondary)", marginTop: 1 }}>
                           (Suggested +{selectedOpp.ce_pct}%)
                         </div>
                         <div style={{ borderTop: "1px dashed rgba(239, 68, 68, 0.15)", marginTop: 8, paddingTop: 6, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                          <span style={{ fontSize: "0.65rem", color: "var(--text-muted)" }}>Current Val:</span>
+                          <span style={{ fontSize: "0.65rem", color: "var(--text-muted)" }}>LTP (Premium):</span>
                           <span style={{ fontSize: "0.85rem", fontWeight: 700, fontFamily: "var(--font-mono)", color: "var(--text-primary)" }}>
-                            {selectedOpp.ce_premium !== null ? `₹${selectedOpp.ce_premium.toFixed(2)}` : "₹0.00"}
+                            {activeExpiryData?.ce_premium !== null && activeExpiryData?.ce_premium !== undefined
+                              ? `₹${activeExpiryData.ce_premium.toFixed(2)}`
+                              : selectedOpp.ce_premium !== null ? `₹${selectedOpp.ce_premium.toFixed(2)}` : "₹0.00"}
                           </span>
                         </div>
                       </div>
@@ -354,15 +416,17 @@ export default function ScannerPage() {
                       <div style={{ background: "rgba(16, 185, 129, 0.05)", border: "1px solid rgba(16, 185, 129, 0.15)", padding: "0.75rem", borderRadius: "var(--radius-md)" }}>
                         <div style={{ fontSize: "0.65rem", color: "var(--text-muted)", textTransform: "uppercase", fontWeight: 600 }}>Sell PE Option</div>
                         <div style={{ fontSize: "0.95rem", fontWeight: 700, color: "var(--accent-emerald)", fontFamily: "var(--font-mono)", marginTop: 2 }}>
-                          {selectedOpp.pe_strike ? selectedOpp.pe_strike.toLocaleString("en-IN") : Math.round(selectedOpp.spot * (1 - selectedOpp.pe_pct/100))} PE
+                          {activeExpiryData?.pe_strike ? activeExpiryData.pe_strike.toLocaleString("en-IN") : Math.round(selectedOpp.spot * (1 - selectedOpp.pe_pct/100))} PE
                         </div>
                         <div style={{ fontSize: "0.65rem", color: "var(--text-secondary)", marginTop: 1 }}>
                           (Suggested -{selectedOpp.pe_pct}%)
                         </div>
                         <div style={{ borderTop: "1px dashed rgba(16, 185, 129, 0.15)", marginTop: 8, paddingTop: 6, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                          <span style={{ fontSize: "0.65rem", color: "var(--text-muted)" }}>Current Val:</span>
+                          <span style={{ fontSize: "0.65rem", color: "var(--text-muted)" }}>LTP (Premium):</span>
                           <span style={{ fontSize: "0.85rem", fontWeight: 700, fontFamily: "var(--font-mono)", color: "var(--text-primary)" }}>
-                            {selectedOpp.pe_premium !== null ? `₹${selectedOpp.pe_premium.toFixed(2)}` : "₹0.00"}
+                            {activeExpiryData?.pe_premium !== null && activeExpiryData?.pe_premium !== undefined
+                              ? `₹${activeExpiryData.pe_premium.toFixed(2)}`
+                              : selectedOpp.pe_premium !== null ? `₹${selectedOpp.pe_premium.toFixed(2)}` : "₹0.00"}
                           </span>
                         </div>
                       </div>
@@ -427,7 +491,6 @@ export default function ScannerPage() {
                                 </td>
                                 <td style={{
                                   padding: "0.75rem 0.5rem",
-                                  alignItems: "center",
                                   textAlign: "right",
                                   fontFamily: "var(--font-mono)",
                                   fontWeight: 700,

@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, desc, func, and_
 
 from app.core.database import get_db
-from app.models import StrategyResult, OptimalSellingBand
+from app.models import StrategyResult, OptimalSellingBand, OptionChain, SpotPrice
 
 router = APIRouter()
 
@@ -73,6 +73,37 @@ async def get_heatmap_data(
     }
 
 
+async def get_strike_and_premium(db: AsyncSession, symbol: str, trade_date, expiry_date, spot_price: float, target_pct: float, option_type: str):
+    q = select(
+        OptionChain.strike,
+        OptionChain.close
+    ).where(
+        OptionChain.symbol == symbol,
+        OptionChain.trade_date == trade_date,
+        OptionChain.expiry == expiry_date,
+        OptionChain.option_type == option_type
+    )
+    res = await db.execute(q)
+    rows = res.all()
+    if not rows:
+        return None, None
+        
+    # Find the nearest strike to target
+    target = spot_price * (1 + target_pct/100) if option_type == "CE" else spot_price * (1 - target_pct/100)
+    nearest_strike = None
+    nearest_close = None
+    min_diff = float("inf")
+    
+    for strike, close in rows:
+        diff = abs(float(strike) - target)
+        if diff < min_diff:
+            min_diff = diff
+            nearest_strike = float(strike)
+            nearest_close = float(close) if close is not None else 0.0
+            
+    return nearest_strike, nearest_close
+
+
 @router.get("/history/{symbol}")
 async def get_strategy_history(
     symbol: str,
@@ -101,10 +132,88 @@ async def get_strategy_history(
     result = await db.execute(query)
     results = result.scalars().all()
 
+    # Get latest available trade date in option chain for this symbol (LTP calculation)
+    max_date_q = select(func.max(OptionChain.trade_date)).where(OptionChain.symbol == symbol.upper())
+    max_date_res = await db.execute(max_date_q)
+    latest_trade_date = max_date_res.scalar()
+
+    # Get current spot price at latest_trade_date
+    current_spot = None
+    if latest_trade_date:
+        spot_q = select(SpotPrice.close).where(
+            SpotPrice.symbol == symbol.upper(),
+            SpotPrice.date == latest_trade_date
+        )
+        spot_res = await db.execute(spot_q)
+        current_spot = spot_res.scalar()
+        if not current_spot:
+            # Fallback to underlying price in option_chain
+            fall_q = select(OptionChain.underlying_price).where(
+                OptionChain.symbol == symbol.upper(),
+                OptionChain.trade_date == latest_trade_date
+            ).limit(1)
+            fall_res = await db.execute(fall_q)
+            current_spot = fall_res.scalar()
+            
+    current_spot = float(current_spot) if current_spot else None
+
+    # Get available expiries on latest_trade_date matching the expiry type
+    expiry_dates = []
+    if latest_trade_date:
+        exp_q = select(OptionChain.expiry).where(
+            OptionChain.symbol == symbol.upper(),
+            OptionChain.trade_date == latest_trade_date,
+            OptionChain.expiry_type == expiry_type
+        ).distinct().order_by(OptionChain.expiry)
+        exp_res = await db.execute(exp_q)
+        expiry_dates = [row[0] for row in exp_res.all()]
+
+    expiries_info = {}
+    if current_spot and len(expiry_dates) >= 1:
+        # Ongoing expiry
+        ong_expiry = expiry_dates[0]
+        ong_ce_strike, ong_ce_prem = await get_strike_and_premium(
+            db, symbol.upper(), latest_trade_date, ong_expiry, current_spot, ce_pct or 2.0, "CE"
+        )
+        ong_pe_strike, ong_pe_prem = await get_strike_and_premium(
+            db, symbol.upper(), latest_trade_date, ong_expiry, current_spot, pe_pct or 1.0, "PE"
+        )
+        expiries_info["ongoing"] = {
+            "expiry_date": str(ong_expiry),
+            "expiry_label": ong_expiry.strftime("%d %b"),
+            "expiry_month": ong_expiry.strftime("%B"),
+            "spot": current_spot,
+            "ce_strike": ong_ce_strike,
+            "pe_strike": ong_pe_strike,
+            "ce_premium": ong_ce_prem,
+            "pe_premium": ong_pe_prem,
+        }
+        
+    if current_spot and len(expiry_dates) >= 2:
+        # Next expiry
+        next_expiry = expiry_dates[1]
+        next_ce_strike, next_ce_prem = await get_strike_and_premium(
+            db, symbol.upper(), latest_trade_date, next_expiry, current_spot, ce_pct or 2.0, "CE"
+        )
+        next_pe_strike, next_pe_prem = await get_strike_and_premium(
+            db, symbol.upper(), latest_trade_date, next_expiry, current_spot, pe_pct or 1.0, "PE"
+        )
+        expiries_info["next"] = {
+            "expiry_date": str(next_expiry),
+            "expiry_label": next_expiry.strftime("%d %b"),
+            "expiry_month": next_expiry.strftime("%B"),
+            "spot": current_spot,
+            "ce_strike": next_ce_strike,
+            "pe_strike": next_pe_strike,
+            "ce_premium": next_ce_prem,
+            "pe_premium": next_pe_prem,
+        }
+
     return {
         "symbol": symbol.upper(),
         "expiry_type": expiry_type,
         "count": len(results),
+        "expiries_info": expiries_info,
         "results": [
             {
                 "expiry": str(r.expiry),

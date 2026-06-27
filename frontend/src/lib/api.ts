@@ -130,6 +130,28 @@ export async function fetchStrategyHistory(
   return apiFetch<{
     symbol: string;
     results: StrategyResult[];
+    expiries_info?: {
+      ongoing?: {
+        expiry_date: string;
+        expiry_label: string;
+        expiry_month: string;
+        spot: number;
+        ce_strike: number | null;
+        pe_strike: number | null;
+        ce_premium: number | null;
+        pe_premium: number | null;
+      };
+      next?: {
+        expiry_date: string;
+        expiry_label: string;
+        expiry_month: string;
+        spot: number;
+        ce_strike: number | null;
+        pe_strike: number | null;
+        ce_premium: number | null;
+        pe_premium: number | null;
+      };
+    };
   }>(`/api/v1/analytics/history/${symbol}`, {
     params: { expiry_type: expiryType, ce_pct: cePct, pe_pct: pePct },
   });
