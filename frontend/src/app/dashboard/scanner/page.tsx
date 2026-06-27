@@ -1,14 +1,20 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Zap, TrendingUp, TrendingDown, Filter } from "lucide-react";
-import { fetchOpportunities } from "../../../lib/api";
+import { Zap, TrendingUp, TrendingDown, Filter, Search, X } from "lucide-react";
+import { fetchOpportunities, fetchStrategyHistory } from "../../../lib/api";
 
 export default function ScannerPage() {
   const [sortBy, setSortBy] = useState("expected_return");
   const [typeFilter, setTypeFilter] = useState("all");
+  const [searchQuery, setSearchQuery] = useState("");
   const [opportunities, setOpportunities] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Split-screen selection states
+  const [selectedOpp, setSelectedOpp] = useState<any | null>(null);
+  const [history, setHistory] = useState<any[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
 
   useEffect(() => {
     async function loadData() {
@@ -40,8 +46,44 @@ export default function ScannerPage() {
     loadData();
   }, [sortBy]);
 
+  // Reset selected item if layout filters change
+  useEffect(() => {
+    setSelectedOpp(null);
+  }, [sortBy, typeFilter]);
+
+  // Fetch backtest results when symbol is selected
+  useEffect(() => {
+    if (!selectedOpp) {
+      setHistory([]);
+      return;
+    }
+    async function loadHistory() {
+      try {
+        setHistoryLoading(true);
+        const res = await fetchStrategyHistory(
+          selectedOpp.symbol,
+          selectedOpp.expiry,
+          selectedOpp.ce_pct,
+          selectedOpp.pe_pct
+        );
+        if (res && res.results) {
+          setHistory(res.results);
+        } else {
+          setHistory([]);
+        }
+      } catch (err) {
+        console.error("Failed to load strategy history:", err);
+        setHistory([]);
+      } finally {
+        setHistoryLoading(false);
+      }
+    }
+    loadHistory();
+  }, [selectedOpp]);
+
   const filtered = opportunities
-    .filter(o => typeFilter === "all" || o.type === typeFilter);
+    .filter(o => typeFilter === "all" || o.type === typeFilter)
+    .filter(o => o.symbol.toLowerCase().includes(searchQuery.toLowerCase()));
 
   return (
     <>
@@ -52,16 +94,41 @@ export default function ScannerPage() {
         </h1>
         <p className="page-subtitle">Real-time ranked opportunities across indices and stocks</p>
       </div>
+      
       <div className="page-body">
-        {/* Filters */}
+        {/* Search & Filters Row */}
         <div style={{ display: "flex", gap: "1rem", marginBottom: "1.25rem", alignItems: "center", flexWrap: "wrap" }}>
           <Filter size={16} style={{ color: "var(--text-muted)" }} />
+          
+          {/* Search Box */}
+          <div style={{ position: "relative", flex: "1 1 200px", maxWidth: "300px" }}>
+            <Search size={16} style={{ position: "absolute", left: "0.75rem", top: "50%", transform: "translateY(-50%)", color: "var(--text-muted)" }} />
+            <input
+              type="text"
+              placeholder="Search symbol (e.g. NIFTY, TCS)..."
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              style={{
+                width: "100%",
+                padding: "0.5rem 1rem 0.5rem 2.25rem",
+                background: "var(--bg-tertiary)",
+                border: "1px solid var(--border-primary)",
+                borderRadius: "var(--radius-md)",
+                color: "var(--text-primary)",
+                fontFamily: "var(--font-sans)",
+                fontSize: "0.85rem",
+                outline: "none"
+              }}
+            />
+          </div>
+
           <select value={sortBy} onChange={e => setSortBy(e.target.value)}
             style={{ padding: "0.5rem 1rem", background: "var(--bg-tertiary)", border: "1px solid var(--border-primary)", borderRadius: "var(--radius-md)", color: "var(--text-primary)", fontFamily: "var(--font-sans)", fontSize: "0.85rem" }}>
             <option value="expected_return">Expected Return</option>
             <option value="probability">Probability</option>
             <option value="risk_score">Risk Score (Low → High)</option>
           </select>
+
           <select value={typeFilter} onChange={e => setTypeFilter(e.target.value)}
             style={{ padding: "0.5rem 1rem", background: "var(--bg-tertiary)", border: "1px solid var(--border-primary)", borderRadius: "var(--radius-md)", color: "var(--text-primary)", fontFamily: "var(--font-sans)", fontSize: "0.85rem" }}>
             <option value="all">All Types</option>
@@ -70,92 +137,262 @@ export default function ScannerPage() {
           </select>
         </div>
 
-        {/* Grid Cards */}
-        <div className="grid-3col">
-          {loading ? (
-            Array.from({ length: 6 }).map((_, idx) => (
-              <div key={idx} className="glass-card animate-fade-in" style={{ padding: "1.25rem" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "1rem" }}>
-                  <div>
-                    <div className="skeleton" style={{ height: 20, width: 100, marginBottom: 6 }} />
-                    <div className="skeleton" style={{ height: 14, width: 80 }} />
+        {/* Master-Detail Split Screen Layout */}
+        <div style={{ display: "flex", gap: "1.5rem", alignItems: "flex-start", position: "relative" }}>
+          
+          {/* Opportunities Left Grid/List */}
+          <div style={{ flex: 1 }}>
+            <div style={{
+              display: "grid",
+              gridTemplateColumns: selectedOpp ? "repeat(2, minmax(0, 1fr))" : "repeat(3, minmax(0, 1fr))",
+              gap: "1.25rem",
+              transition: "all var(--transition-base)"
+            }}>
+              {loading ? (
+                Array.from({ length: 6 }).map((_, idx) => (
+                  <div key={idx} className="glass-card animate-fade-in" style={{ padding: "1.25rem" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "1rem" }}>
+                      <div>
+                        <div className="skeleton" style={{ height: 20, width: 100, marginBottom: 6 }} />
+                        <div className="skeleton" style={{ height: 14, width: 80 }} />
+                      </div>
+                      <div className="skeleton" style={{ height: 20, width: 60, borderRadius: 100 }} />
+                    </div>
+                    <div className="skeleton" style={{ height: 12, width: 40, marginBottom: 6 }} />
+                    <div className="skeleton" style={{ height: 24, width: 120, marginBottom: "1rem" }} />
+                    <div style={{ display: "flex", gap: "0.75rem", marginBottom: "1rem" }}>
+                      <div className="skeleton" style={{ height: 24, flex: 1, borderRadius: 100 }} />
+                      <div className="skeleton" style={{ height: 24, flex: 1, borderRadius: 100 }} />
+                    </div>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "0.5rem" }}>
+                      <div className="skeleton" style={{ height: 32 }} />
+                      <div className="skeleton" style={{ height: 32 }} />
+                      <div className="skeleton" style={{ height: 32 }} />
+                    </div>
                   </div>
-                  <div className="skeleton" style={{ height: 20, width: 60, borderRadius: 100 }} />
+                ))
+              ) : filtered.length === 0 ? (
+                <div style={{ gridColumn: "1 / -1", textAlign: "center", padding: "3rem", color: "var(--text-muted)" }}>
+                  <p>No opportunities matching filters or search terms found.</p>
                 </div>
-                <div className="skeleton" style={{ height: 12, width: 40, marginBottom: 6 }} />
-                <div className="skeleton" style={{ height: 24, width: 120, marginBottom: "1rem" }} />
-                <div style={{ display: "flex", gap: "0.75rem", marginBottom: "1rem" }}>
-                  <div className="skeleton" style={{ height: 24, flex: 1, borderRadius: 100 }} />
-                  <div className="skeleton" style={{ height: 24, flex: 1, borderRadius: 100 }} />
-                </div>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "0.5rem" }}>
-                  <div className="skeleton" style={{ height: 32 }} />
-                  <div className="skeleton" style={{ height: 32 }} />
-                  <div className="skeleton" style={{ height: 32 }} />
-                </div>
-              </div>
-            ))
-          ) : filtered.length === 0 ? (
-            <div style={{ gridColumn: "1 / -1", textAlign: "center", padding: "3rem", color: "var(--text-muted)" }}>
-              <p>No opportunities matching filters found in database.</p>
+              ) : (
+                filtered.map((opp, idx) => {
+                  const isSelected = selectedOpp?.symbol === opp.symbol && selectedOpp?.expiry === opp.expiry;
+                  return (
+                    <div
+                      key={opp.symbol + opp.expiry}
+                      className="glass-card animate-fade-in"
+                      onClick={() => setSelectedOpp(opp)}
+                      style={{
+                        padding: "1.25rem",
+                        animationDelay: `${idx * 40}ms`,
+                        cursor: "pointer",
+                        border: isSelected ? "2px solid var(--accent-blue)" : "1px solid var(--border-primary)",
+                        boxShadow: isSelected ? "var(--shadow-glow-blue)" : "var(--shadow-sm)",
+                        transform: isSelected ? "translateY(-2px)" : "none",
+                        transition: "all var(--transition-fast)"
+                      }}
+                    >
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "1rem" }}>
+                        <div>
+                          <div style={{ fontWeight: 700, fontSize: "1.1rem", color: "var(--text-primary)" }}>{opp.symbol}</div>
+                          <div style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
+                            {opp.type === "index" ? "Index" : "Stock"} · {opp.expiry}
+                          </div>
+                        </div>
+                        <span className={`badge badge-${opp.regime === "bull" ? "success" : opp.regime === "bear" ? "danger" : "info"}`}>
+                          {opp.regime}
+                        </span>
+                      </div>
+
+                      <div style={{ fontSize: "0.8rem", color: "var(--text-muted)", marginBottom: 4 }}>Spot</div>
+                      <div style={{ fontSize: "1.15rem", fontWeight: 600, fontFamily: "var(--font-mono)", color: "var(--text-secondary)", marginBottom: "1rem" }}>
+                        ₹{opp.spot.toLocaleString("en-IN")}
+                      </div>
+
+                      <div style={{ display: "flex", gap: "0.75rem", marginBottom: "1rem" }}>
+                        <span className="badge badge-danger" style={{ flex: 1, justifyContent: "center" }}>
+                          <TrendingUp size={12} />
+                          CE +{opp.ce_pct}%
+                        </span>
+                        <span className="badge badge-success" style={{ flex: 1, justifyContent: "center" }}>
+                          <TrendingDown size={12} />
+                          PE -{opp.pe_pct}%
+                        </span>
+                      </div>
+
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "0.5rem" }}>
+                        <div style={{ textAlign: "center" }}>
+                          <div style={{ fontSize: "0.65rem", color: "var(--text-muted)", textTransform: "uppercase" }}>Prob</div>
+                          <div style={{ fontSize: "0.95rem", fontWeight: 700, color: opp.probability > 0.85 ? "var(--accent-emerald)" : "var(--accent-amber)" }}>
+                            {(opp.probability * 100).toFixed(0)}%
+                          </div>
+                        </div>
+                        <div style={{ textAlign: "center" }}>
+                          <div style={{ fontSize: "0.65rem", color: "var(--text-muted)", textTransform: "uppercase" }}>Return</div>
+                          <div style={{ fontSize: "0.95rem", fontWeight: 700, color: "var(--accent-emerald)" }}>
+                            {(opp.expected_return * 100).toFixed(1)}%
+                          </div>
+                        </div>
+                        <div style={{ textAlign: "center" }}>
+                          <div style={{ fontSize: "0.65rem", color: "var(--text-muted)", textTransform: "uppercase" }}>Risk</div>
+                          <div style={{ fontSize: "0.95rem", fontWeight: 700, color: opp.risk_score > 0.3 ? "var(--accent-red)" : "var(--accent-blue)" }}>
+                            {opp.risk_score.toFixed(2)}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
             </div>
-          ) : (
-            filtered.map((opp, idx) => (
-              <div
-                key={opp.symbol + opp.expiry}
-                className="glass-card animate-fade-in"
-                style={{ padding: "1.25rem", animationDelay: `${idx * 50}ms` }}
-              >
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "1rem" }}>
-                  <div>
-                    <div style={{ fontWeight: 700, fontSize: "1.1rem", color: "var(--text-primary)" }}>{opp.symbol}</div>
-                    <div style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
-                      {opp.type === "index" ? "Index" : "Stock"} · {opp.expiry}
-                    </div>
-                  </div>
-                  <span className={`badge badge-${opp.regime === "bull" ? "success" : opp.regime === "bear" ? "danger" : "info"}`}>
-                    {opp.regime}
-                  </span>
-                </div>
+          </div>
 
-                <div style={{ fontSize: "0.8rem", color: "var(--text-muted)", marginBottom: 4 }}>Spot</div>
-                <div style={{ fontSize: "1.15rem", fontWeight: 600, fontFamily: "var(--font-mono)", color: "var(--text-secondary)", marginBottom: "1rem" }}>
-                  ₹{opp.spot.toLocaleString("en-IN")}
+          {/* Right sticky backtest panel */}
+          {selectedOpp && (
+            <div
+              className="glass-card animate-fade-in"
+              style={{
+                flex: "0 0 42%",
+                position: "sticky",
+                top: "20px",
+                maxHeight: "calc(100vh - 120px)",
+                display: "flex",
+                flexDirection: "column",
+                padding: "1.5rem",
+                border: "1px solid var(--border-accent)",
+                boxShadow: "var(--shadow-md)"
+              }}
+            >
+              {/* Header */}
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "1.25rem" }}>
+                <div>
+                  <h2 style={{ fontSize: "1.3rem", fontWeight: 800, color: "var(--text-primary)" }}>
+                    {selectedOpp.symbol} Backtest
+                  </h2>
+                  <p style={{ fontSize: "0.8rem", color: "var(--text-muted)", marginTop: 2 }}>
+                    {selectedOpp.expiry === "weekly" ? "Weekly" : "Monthly"} Option Selling History
+                  </p>
                 </div>
+                <button
+                  onClick={() => setSelectedOpp(null)}
+                  style={{
+                    background: "rgba(255,255,255,0.05)",
+                    border: "none",
+                    borderRadius: "50%",
+                    width: 28,
+                    height: 28,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    color: "var(--text-secondary)",
+                    cursor: "pointer",
+                    transition: "background var(--transition-fast)"
+                  }}
+                  onMouseEnter={(e) => e.currentTarget.style.background = "rgba(255,255,255,0.1)"}
+                  onMouseLeave={(e) => e.currentTarget.style.background = "rgba(255,255,255,0.05)"}
+                >
+                  <X size={14} />
+                </button>
+              </div>
 
-                <div style={{ display: "flex", gap: "0.75rem", marginBottom: "1rem" }}>
-                  <span className="badge badge-danger" style={{ flex: 1, justifyContent: "center" }}>
-                    <TrendingUp size={12} />
-                    CE +{opp.ce_pct}%
-                  </span>
-                  <span className="badge badge-success" style={{ flex: 1, justifyContent: "center" }}>
-                    <TrendingDown size={12} />
-                    PE -{opp.pe_pct}%
-                  </span>
+              {/* Backtest Parameters */}
+              <div style={{ display: "flex", gap: "1rem", marginBottom: "1.25rem", paddingBottom: "1.25rem", borderBottom: "1px solid var(--border-primary)" }}>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: "0.7rem", color: "var(--text-muted)", textTransform: "uppercase" }}>CE Sell Strike</div>
+                  <div style={{ fontSize: "0.95rem", fontWeight: 600, color: "var(--text-secondary)", marginTop: 2 }}>
+                    +{selectedOpp.ce_pct}% (Strike: {Math.round(selectedOpp.spot * (1 + selectedOpp.ce_pct/100))})
+                  </div>
                 </div>
-
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "0.5rem" }}>
-                  <div style={{ textAlign: "center" }}>
-                    <div style={{ fontSize: "0.65rem", color: "var(--text-muted)", textTransform: "uppercase" }}>Prob</div>
-                    <div style={{ fontSize: "0.95rem", fontWeight: 700, color: opp.probability > 0.85 ? "var(--accent-emerald)" : "var(--accent-amber)" }}>
-                      {(opp.probability * 100).toFixed(0)}%
-                    </div>
-                  </div>
-                  <div style={{ textAlign: "center" }}>
-                    <div style={{ fontSize: "0.65rem", color: "var(--text-muted)", textTransform: "uppercase" }}>Return</div>
-                    <div style={{ fontSize: "0.95rem", fontWeight: 700, color: "var(--accent-emerald)" }}>
-                      {(opp.expected_return * 100).toFixed(1)}%
-                    </div>
-                  </div>
-                  <div style={{ textAlign: "center" }}>
-                    <div style={{ fontSize: "0.65rem", color: "var(--text-muted)", textTransform: "uppercase" }}>Risk</div>
-                    <div style={{ fontSize: "0.95rem", fontWeight: 700, color: opp.risk_score > 0.3 ? "var(--accent-red)" : "var(--accent-blue)" }}>
-                      {opp.risk_score.toFixed(2)}
-                    </div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: "0.7rem", color: "var(--text-muted)", textTransform: "uppercase" }}>PE Sell Strike</div>
+                  <div style={{ fontSize: "0.95rem", fontWeight: 600, color: "var(--text-secondary)", marginTop: 2 }}>
+                    -{selectedOpp.pe_pct}% (Strike: {Math.round(selectedOpp.spot * (1 - selectedOpp.pe_pct/100))})
                   </div>
                 </div>
               </div>
-            ))
+
+              {/* Data Content */}
+              {historyLoading ? (
+                <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "1rem", justifyContent: "center" }}>
+                  <div className="skeleton" style={{ height: 60, borderRadius: "var(--radius-md)" }} />
+                  <div className="skeleton" style={{ height: 120, borderRadius: "var(--radius-md)" }} />
+                </div>
+              ) : history.length === 0 ? (
+                <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "2rem", color: "var(--text-muted)", textAlign: "center" }}>
+                  <p style={{ fontSize: "0.9rem" }}>No backtest strategy results found for this specific CE/PE percentage combination.</p>
+                </div>
+              ) : (
+                <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+                  {/* Summary performance card */}
+                  <div style={{
+                    display: "grid",
+                    gridTemplateColumns: "1fr 1fr",
+                    gap: "1rem",
+                    background: "rgba(0, 0, 0, 0.15)",
+                    padding: "1rem",
+                    borderRadius: "var(--radius-md)",
+                    marginBottom: "1.25rem"
+                  }}>
+                    <div>
+                      <div style={{ fontSize: "0.7rem", color: "var(--text-muted)", textTransform: "uppercase" }}>Win Rate</div>
+                      <div style={{ fontSize: "1.3rem", fontWeight: 800, color: "var(--accent-emerald)", marginTop: 2 }}>
+                        {((history.filter(h => h.ce_expired_worthless && h.pe_expired_worthless).length / history.length) * 100).toFixed(0)}%
+                      </div>
+                      <div style={{ fontSize: "0.65rem", color: "var(--text-muted)", marginTop: 1 }}>
+                        {history.filter(h => h.ce_expired_worthless && h.pe_expired_worthless).length} / {history.length} Expiries Worthless
+                      </div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: "0.7rem", color: "var(--text-muted)", textTransform: "uppercase" }}>Avg Return</div>
+                      <div style={{ fontSize: "1.3rem", fontWeight: 800, color: "var(--accent-blue)", marginTop: 2 }}>
+                        {(history.reduce((acc, h) => acc + (h.return_pct ?? 0), 0) / history.length).toFixed(2)}%
+                      </div>
+                      <div style={{ fontSize: "0.65rem", color: "var(--text-muted)", marginTop: 1 }}>
+                        Expected P&L: {(history.reduce((acc, h) => acc + (h.total_pnl ?? 0), 0) / history.length).toFixed(1)} pts
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Scrollable Backtest Table */}
+                  <div style={{ flex: 1, overflowY: "auto", paddingRight: "0.25rem" }}>
+                    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.85rem", textAlign: "left" }}>
+                      <thead>
+                        <tr style={{ borderBottom: "1px solid var(--border-primary)", color: "var(--text-muted)" }}>
+                          <th style={{ padding: "0.5rem", fontWeight: 600 }}>Expiry</th>
+                          <th style={{ padding: "0.5rem", textAlign: "right", fontWeight: 600 }}>Spot (Entry → Expiry)</th>
+                          <th style={{ padding: "0.5rem", textAlign: "right", fontWeight: 600 }}>Return %</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {history.map((record, index) => {
+                          const isWin = record.ce_expired_worthless && record.pe_expired_worthless;
+                          return (
+                            <tr key={index} style={{ borderBottom: "1px solid rgba(255, 255, 255, 0.04)" }}>
+                              <td style={{ padding: "0.75rem 0.5rem", color: "var(--text-secondary)", fontWeight: 500 }}>
+                                {new Date(record.expiry).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}
+                              </td>
+                              <td style={{ padding: "0.75rem 0.5rem", textAlign: "right", fontFamily: "var(--font-mono)", color: "var(--text-secondary)" }}>
+                                {record.spot_at_entry?.toFixed(0)} → {record.spot_at_expiry?.toFixed(0)}
+                              </td>
+                              <td style={{
+                                padding: "0.75rem 0.5rem",
+                                textAlign: "right",
+                                fontFamily: "var(--font-mono)",
+                                fontWeight: 700,
+                                color: (record.return_pct ?? 0) >= 0 ? "var(--accent-emerald)" : "var(--accent-red)"
+                              }}>
+                                {(record.return_pct ?? 0) >= 0 ? "+" : ""}{(record.return_pct ?? 0).toFixed(1)}%
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </div>
           )}
         </div>
       </div>
