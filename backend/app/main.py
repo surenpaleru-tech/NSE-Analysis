@@ -82,25 +82,28 @@ async def health_check():
 
 @app.get("/api/db-tcs", tags=["Health"])
 async def db_tcs():
-    from app.core.database import async_session_factory
-    from sqlalchemy import text
-    async with async_session_factory() as session:
-        res = await session.execute(
-            text("SELECT date, close FROM spot_prices WHERE symbol = 'TCS' ORDER BY date DESC LIMIT 30;")
-        )
-        spot_rows = [{"date": str(row[0]), "close": float(row[1])} for row in res.all()]
-        
-        # Get count
-        cnt_res = await session.execute(
-            text("SELECT COUNT(*) FROM spot_prices WHERE symbol = 'TCS';")
-        )
-        count = cnt_res.scalar()
-        
-    return {
-        "symbol": "TCS",
-        "total_records": count,
-        "records": spot_rows
-    }
+    try:
+        from app.core.database import async_session_factory
+        from sqlalchemy import text
+        async with async_session_factory() as session:
+            res = await session.execute(
+                text("SELECT date, close FROM spot_prices WHERE symbol = 'TCS' ORDER BY date DESC LIMIT 30;")
+            )
+            spot_rows = [{"date": str(row[0]), "close": float(row[1]) if row[1] is not None else None} for row in res.all()]
+            
+            # Get count
+            cnt_res = await session.execute(
+                text("SELECT COUNT(*) FROM spot_prices WHERE symbol = 'TCS';")
+            )
+            count = cnt_res.scalar()
+            
+        return {
+            "symbol": "TCS",
+            "total_records": count,
+            "records": spot_rows
+        }
+    except Exception as e:
+        return {"error": str(e)}
 
 
 @app.get("/", tags=["Root"])
