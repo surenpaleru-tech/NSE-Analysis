@@ -476,6 +476,8 @@ export default function ScannerPage() {
                           <tr style={{ borderBottom: "1px solid var(--border-primary)", color: "var(--text-muted)" }}>
                             <th style={{ padding: "0.5rem", fontWeight: 600 }}>Expiry</th>
                             <th style={{ padding: "0.5rem", textAlign: "right", fontWeight: 600 }}>Spot (Entry → Expiry)</th>
+                            <th style={{ padding: "0.5rem", textAlign: "right", fontWeight: 600 }}>CE (Entry → Exit)</th>
+                            <th style={{ padding: "0.5rem", textAlign: "right", fontWeight: 600 }}>PE (Entry → Exit)</th>
                             <th style={{ padding: "0.5rem", textAlign: "right", fontWeight: 600 }}>Return %</th>
                           </tr>
                         </thead>
@@ -488,6 +490,12 @@ export default function ScannerPage() {
                                 </td>
                                 <td style={{ padding: "0.75rem 0.5rem", textAlign: "right", fontFamily: "var(--font-mono)", color: "var(--text-secondary)" }}>
                                   {record.spot_at_entry?.toFixed(0)} → {record.spot_at_expiry?.toFixed(0)}
+                                </td>
+                                <td style={{ padding: "0.75rem 0.5rem", textAlign: "right", fontFamily: "var(--font-mono)", color: "var(--text-secondary)" }}>
+                                  {record.ce_entry_premium !== null && record.ce_entry_premium !== undefined ? record.ce_entry_premium.toFixed(1) : "-"} → {record.ce_expiry_premium !== null && record.ce_expiry_premium !== undefined ? record.ce_expiry_premium.toFixed(1) : "-"}
+                                </td>
+                                <td style={{ padding: "0.75rem 0.5rem", textAlign: "right", fontFamily: "var(--font-mono)", color: "var(--text-secondary)" }}>
+                                  {record.pe_entry_premium !== null && record.pe_entry_premium !== undefined ? record.pe_entry_premium.toFixed(1) : "-"} → {record.pe_expiry_premium !== null && record.pe_expiry_premium !== undefined ? record.pe_expiry_premium.toFixed(1) : "-"}
                                 </td>
                                 <td style={{
                                   padding: "0.75rem 0.5rem",

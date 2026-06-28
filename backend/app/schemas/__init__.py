@@ -76,6 +76,10 @@ class StrategyResultResponse(BaseModel):
     pe_strike: Optional[float] = None
     spot_at_entry: Optional[float] = None
     spot_at_expiry: Optional[float] = None
+    ce_entry_premium: Optional[float] = None
+    pe_entry_premium: Optional[float] = None
+    ce_expiry_premium: Optional[float] = None
+    pe_expiry_premium: Optional[float] = None
     ce_pnl: Optional[float] = None
     pe_pnl: Optional[float] = None
     total_pnl: Optional[float] = None
