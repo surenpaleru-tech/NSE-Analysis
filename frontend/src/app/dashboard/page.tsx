@@ -1,21 +1,30 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import {
-  TrendingUp,
-  TrendingDown,
   Activity,
-  Target,
+  ArrowRight,
   BarChart3,
+  CandlestickChart,
+  Radar,
+  Target,
+  TrendingDown,
+  TrendingUp,
+  Waves,
   Zap,
 } from "lucide-react";
-import { fetchOverview, fetchOpportunities } from "../../lib/api";
+
+import { fetchOpportunities, fetchOverview } from "../../lib/api";
 
 interface OverviewData {
   latest_vix: number | null;
   symbols_tracked: number;
   latest_recommendations: number;
   latest_date: string | null;
+  avg_probability: number | null;
+  current_market_regime: string | null;
+  top_symbol: string | null;
 }
 
 interface QuickRec {
@@ -27,12 +36,36 @@ interface QuickRec {
   expected_return: number | null;
 }
 
+const workspaceLinks = [
+  {
+    href: "/dashboard/projections",
+    title: "Projection Board",
+    subtitle: "Best CE and PE percentages across the live universe",
+    icon: Radar,
+  },
+  {
+    href: "/dashboard/futures",
+    title: "Futures Outlook",
+    subtitle: "Directional futures bias built from historical spot behavior",
+    icon: CandlestickChart,
+  },
+  {
+    href: "/dashboard/scanner",
+    title: "Scanner",
+    subtitle: "Fast ranked opportunities for the current session",
+    icon: Zap,
+  },
+];
+
 export default function DashboardOverview() {
   const [metrics, setMetrics] = useState<OverviewData>({
     latest_vix: null,
     symbols_tracked: 0,
     latest_recommendations: 0,
     latest_date: null,
+    avg_probability: null,
+    current_market_regime: null,
+    top_symbol: null,
   });
   const [topPicks, setTopPicks] = useState<QuickRec[]>([]);
   const [loading, setLoading] = useState(true);
@@ -44,51 +77,87 @@ export default function DashboardOverview() {
           fetchOverview(),
           fetchOpportunities("expected_return", 6),
         ]);
+
         if (overviewRes) {
           setMetrics({
             latest_vix: overviewRes.latest_vix,
             symbols_tracked: overviewRes.symbols_tracked,
             latest_recommendations: overviewRes.latest_recommendations,
             latest_date: overviewRes.latest_date,
+            avg_probability: overviewRes.avg_probability,
+            current_market_regime: overviewRes.current_market_regime,
+            top_symbol: overviewRes.top_symbol,
           });
         }
-        if (oppsRes && oppsRes.opportunities) {
-          const recs: QuickRec[] = oppsRes.opportunities.map(o => ({
-            symbol: o.symbol,
-            spot_price: o.spot_price,
-            recommended_ce_pct: o.recommended_ce_pct,
-            recommended_pe_pct: o.recommended_pe_pct,
-            combined_probability: o.combined_probability,
-            expected_return: o.expected_return,
-          }));
-          setTopPicks(recs);
+
+        if (oppsRes?.opportunities) {
+          setTopPicks(
+            oppsRes.opportunities.map((row) => ({
+              symbol: row.symbol,
+              spot_price: row.spot_price,
+              recommended_ce_pct: row.recommended_ce_pct,
+              recommended_pe_pct: row.recommended_pe_pct,
+              combined_probability: row.combined_probability,
+              expected_return: row.expected_return,
+            })),
+          );
         }
-      } catch (err) {
-        console.error("Failed to load overview dashboard data:", err);
+      } catch (error) {
+        console.error("Failed to load overview dashboard data:", error);
       } finally {
         setLoading(false);
       }
     }
+
     loadData();
   }, []);
 
-  const formatPercent = (val: number | null) =>
-    val !== null ? `${(val * 100).toFixed(1)}%` : "--";
-  const formatPrice = (val: number | null) =>
-    val !== null ? `₹${val.toLocaleString("en-IN")}` : "--";
+  const formatPercent = (value: number | null, digits = 1) =>
+    value !== null ? `${(value * 100).toFixed(digits)}%` : "--";
+
+  const formatPrice = (value: number | null) =>
+    value !== null ? `Rs ${value.toLocaleString("en-IN")}` : "--";
+
+  const regimeLabel = metrics.current_market_regime ?? "Awaiting regime";
 
   return (
     <>
       <div className="page-header">
-        <h1 className="page-title">Dashboard Overview</h1>
+        <h1 className="page-title">Trading Workspace Overview</h1>
         <p className="page-subtitle">
-          Real-time recommendations and market intelligence
+          Current signals, top ranges, and direct links into the new projection tools
         </p>
       </div>
 
       <div className="page-body">
-        {/* Metric Cards */}
-        <div className="grid-metrics animate-fade-in">
+        <section className="hero-panel animate-fade-in">
+          <div className="hero-copy">
+            <span className="hero-eyebrow">Today&apos;s pulse</span>
+            <h2>
+              Best symbol right now: <span>{metrics.top_symbol ?? "Waiting for fresh data"}</span>
+            </h2>
+            <p>
+              Watch the live recommendation set, then jump into projection board or futures outlook
+              for deeper planning across the coming weeks and months.
+            </p>
+          </div>
+          <div className="hero-stat-strip">
+            <div>
+              <span>Recommendation date</span>
+              <strong>{metrics.latest_date ?? "--"}</strong>
+            </div>
+            <div>
+              <span>Average probability</span>
+              <strong>{formatPercent(metrics.avg_probability)}</strong>
+            </div>
+            <div>
+              <span>Current regime</span>
+              <strong>{regimeLabel}</strong>
+            </div>
+          </div>
+        </section>
+
+        <div className="grid-metrics animate-fade-in" style={{ marginTop: "1.5rem" }}>
           <MetricCard
             label="India VIX"
             value={metrics.latest_vix?.toFixed(2) ?? "--"}
@@ -96,10 +165,10 @@ export default function DashboardOverview() {
             badge={
               metrics.latest_vix
                 ? metrics.latest_vix < 15
-                  ? { text: "Low", variant: "success" as const }
+                  ? { text: "Low volatility", variant: "success" as const }
                   : metrics.latest_vix > 25
-                  ? { text: "High", variant: "danger" as const }
-                  : { text: "Medium", variant: "warning" as const }
+                    ? { text: "High volatility", variant: "danger" as const }
+                    : { text: "Balanced", variant: "warning" as const }
                 : undefined
             }
           />
@@ -107,255 +176,135 @@ export default function DashboardOverview() {
             label="Symbols Tracked"
             value={metrics.symbols_tracked.toString()}
             icon={<BarChart3 size={20} />}
-            badge={{ text: "Active", variant: "success" as const }}
+            badge={{ text: "Live universe", variant: "info" as const }}
           />
           <MetricCard
             label="Recommendations"
             value={metrics.latest_recommendations.toString()}
             icon={<Target size={20} />}
-            badge={{ text: "Today", variant: "info" as const }}
+            badge={{ text: "Latest session", variant: "success" as const }}
           />
           <MetricCard
             label="Market Regime"
-            value="Sideways"
-            icon={<TrendingUp size={20} />}
-            badge={{ text: "Stable", variant: "info" as const }}
+            value={regimeLabel}
+            icon={<Waves size={20} />}
+            badge={{ text: "Adaptive", variant: "info" as const }}
           />
         </div>
 
-        {/* Top Picks Table */}
-        <div
-          className="glass-card animate-fade-in"
-          style={{ marginTop: "1.5rem", padding: "1.5rem" }}
-        >
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              marginBottom: "1.25rem",
-            }}
-          >
+        <section className="workspace-grid" style={{ marginTop: "1.5rem" }}>
+          {workspaceLinks.map((item) => {
+            const Icon = item.icon;
+            return (
+              <Link key={item.href} href={item.href} className="workspace-link-card">
+                <div className="workspace-link-top">
+                  <span className="workspace-link-icon">
+                    <Icon size={18} />
+                  </span>
+                  <ArrowRight size={16} />
+                </div>
+                <h3>{item.title}</h3>
+                <p>{item.subtitle}</p>
+              </Link>
+            );
+          })}
+        </section>
+
+        <section className="glass-card" style={{ marginTop: "1.5rem", padding: "1.5rem" }}>
+          <div className="section-heading">
             <div>
-              <h2
-                style={{
-                  fontSize: "1.1rem",
-                  fontWeight: 600,
-                  color: "var(--text-primary)",
-                }}
-              >
-                <Zap
-                  size={18}
-                  style={{
-                    display: "inline",
-                    marginRight: 8,
-                    color: "var(--accent-amber)",
-                  }}
-                />
-                Top Recommendations
+              <h2>
+                <Zap size={18} style={{ color: "var(--accent-amber)" }} />
+                Live Top Recommendations
               </h2>
-              <p
-                style={{
-                  fontSize: "0.8rem",
-                  color: "var(--text-muted)",
-                  marginTop: 4,
-                }}
-              >
-                Best CE/PE selling opportunities ranked by expected return
-              </p>
+              <p>Highest expected-return opportunities from the latest database snapshot</p>
             </div>
+            <Link href="/dashboard/scanner" className="btn btn-ghost">
+              Open scanner
+            </Link>
           </div>
 
           <div style={{ overflowX: "auto" }}>
-            <table
-              style={{
-                width: "100%",
-                borderCollapse: "collapse",
-                fontSize: "0.875rem",
-              }}
-            >
+            <table className="data-table">
               <thead>
-                <tr
-                  style={{
-                    borderBottom: "1px solid var(--border-primary)",
-                  }}
-                >
+                <tr>
                   {[
                     "Symbol",
-                    "Spot Price",
-                    "CE %",
-                    "PE %",
-                    "CE Strike",
-                    "PE Strike",
+                    "Spot",
+                    "CE band",
+                    "PE band",
+                    "Projected range",
                     "Probability",
-                    "Exp. Return",
-                  ].map((h) => (
-                    <th
-                      key={h}
-                      style={{
-                        padding: "0.75rem 1rem",
-                        textAlign: "left",
-                        color: "var(--text-muted)",
-                        fontWeight: 600,
-                        fontSize: "0.75rem",
-                        textTransform: "uppercase",
-                        letterSpacing: "0.06em",
-                      }}
-                    >
-                      {h}
-                    </th>
+                    "Expected value",
+                  ].map((heading) => (
+                    <th key={heading}>{heading}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {loading ? (
-                  Array.from({ length: 6 }).map((_, idx) => (
-                    <tr key={idx} style={{ borderBottom: "1px solid var(--border-glass)" }}>
-                      <td style={{ padding: "0.875rem 1rem" }}><div className="skeleton" style={{ height: 16, width: 60 }} /></td>
-                      <td style={{ padding: "0.875rem 1rem" }}><div className="skeleton" style={{ height: 16, width: 80 }} /></td>
-                      <td style={{ padding: "0.875rem 1rem" }}><div className="skeleton" style={{ height: 16, width: 50 }} /></td>
-                      <td style={{ padding: "0.875rem 1rem" }}><div className="skeleton" style={{ height: 16, width: 50 }} /></td>
-                      <td style={{ padding: "0.875rem 1rem" }}><div className="skeleton" style={{ height: 16, width: 70 }} /></td>
-                      <td style={{ padding: "0.875rem 1rem" }}><div className="skeleton" style={{ height: 16, width: 70 }} /></td>
-                      <td style={{ padding: "0.875rem 1rem" }}><div className="skeleton" style={{ height: 16, width: 100 }} /></td>
-                      <td style={{ padding: "0.875rem 1rem" }}><div className="skeleton" style={{ height: 16, width: 60 }} /></td>
+                  Array.from({ length: 6 }).map((_, index) => (
+                    <tr key={index}>
+                      {Array.from({ length: 7 }).map((__, cellIndex) => (
+                        <td key={cellIndex}>
+                          <div className="skeleton" style={{ height: 16, width: "70%" }} />
+                        </td>
+                      ))}
                     </tr>
                   ))
                 ) : topPicks.length === 0 ? (
                   <tr>
-                    <td colSpan={8} style={{ padding: "2rem", textAlign: "center", color: "var(--text-muted)" }}>
-                      No recommendations found in database.
+                    <td colSpan={7} className="empty-state-cell">
+                      No recommendations found in the current database snapshot.
                     </td>
                   </tr>
                 ) : (
-                  topPicks.map((rec, idx) => {
+                  topPicks.map((rec) => {
                     const ceStrike =
-                      rec.spot_price && rec.recommended_ce_pct
+                      rec.spot_price !== null && rec.recommended_ce_pct !== null
                         ? rec.spot_price * (1 + rec.recommended_ce_pct / 100)
                         : null;
                     const peStrike =
-                      rec.spot_price && rec.recommended_pe_pct
+                      rec.spot_price !== null && rec.recommended_pe_pct !== null
                         ? rec.spot_price * (1 - rec.recommended_pe_pct / 100)
                         : null;
 
                     return (
-                      <tr
-                        key={rec.symbol}
-                        style={{
-                          borderBottom: "1px solid var(--border-glass)",
-                          transition: "background var(--transition-fast)",
-                          cursor: "pointer",
-                        }}
-                        onMouseEnter={(e) =>
-                          (e.currentTarget.style.background =
-                            "var(--bg-hover)")
-                        }
-                        onMouseLeave={(e) =>
-                          (e.currentTarget.style.background = "transparent")
-                        }
-                      >
-                        <td
-                          style={{
-                            padding: "0.875rem 1rem",
-                            fontWeight: 600,
-                            color: "var(--text-primary)",
-                          }}
-                        >
-                          {rec.symbol}
-                        </td>
-                        <td
-                          style={{
-                            padding: "0.875rem 1rem",
-                            fontFamily: "var(--font-mono)",
-                            color: "var(--text-secondary)",
-                          }}
-                        >
-                          {formatPrice(rec.spot_price)}
-                        </td>
-                        <td style={{ padding: "0.875rem 1rem" }}>
-                          <span className="badge badge-danger">
-                            <TrendingUp size={12} style={{ marginRight: 4 }} />
-                            +{rec.recommended_ce_pct}%
-                          </span>
-                        </td>
-                        <td style={{ padding: "0.875rem 1rem" }}>
-                          <span className="badge badge-success">
-                            <TrendingDown size={12} style={{ marginRight: 4 }} />
-                            -{rec.recommended_pe_pct}%
-                          </span>
-                        </td>
-                        <td
-                          style={{
-                            padding: "0.875rem 1rem",
-                            fontFamily: "var(--font-mono)",
-                            color: "var(--text-secondary)",
-                            fontSize: "0.8rem",
-                          }}
-                        >
-                          {ceStrike ? `₹${Math.round(ceStrike).toLocaleString("en-IN")}` : "--"}
-                        </td>
-                        <td
-                          style={{
-                            padding: "0.875rem 1rem",
-                            fontFamily: "var(--font-mono)",
-                            color: "var(--text-secondary)",
-                            fontSize: "0.8rem",
-                          }}
-                        >
-                          {peStrike ? `₹${Math.round(peStrike).toLocaleString("en-IN")}` : "--"}
-                        </td>
-                        <td style={{ padding: "0.875rem 1rem" }}>
-                          <div
-                            style={{
-                              display: "flex",
-                              alignItems: "center",
-                              gap: 8,
-                            }}
-                          >
-                            <div
-                              style={{
-                                width: 60,
-                                height: 6,
-                                background: "var(--bg-tertiary)",
-                                borderRadius: 3,
-                                overflow: "hidden",
-                              }}
-                            >
-                              <div
-                                style={{
-                                  width: `${(rec.combined_probability ?? 0) * 100}%`,
-                                  height: "100%",
-                                  background:
-                                    (rec.combined_probability ?? 0) > 0.85
-                                      ? "var(--accent-emerald)"
-                                      : "var(--accent-amber)",
-                                  borderRadius: 3,
-                                }}
-                              />
-                            </div>
-                            <span
-                              style={{
-                                fontSize: "0.8rem",
-                                fontWeight: 600,
-                                color:
-                                  (rec.combined_probability ?? 0) > 0.85
-                                    ? "var(--accent-emerald)"
-                                    : "var(--accent-amber)",
-                              }}
-                            >
-                              {formatPercent(rec.combined_probability)}
-                            </span>
+                      <tr key={rec.symbol}>
+                        <td>
+                          <div className="table-symbol">
+                            <strong>{rec.symbol}</strong>
+                            <span>{metrics.latest_date ?? "--"}</span>
                           </div>
                         </td>
-                        <td
-                          style={{
-                            padding: "0.875rem 1rem",
-                            fontWeight: 700,
-                            color: "var(--accent-emerald)",
-                            fontFamily: "var(--font-mono)",
-                          }}
-                        >
-                          {formatPercent(rec.expected_return)}
+                        <td className="mono">{formatPrice(rec.spot_price)}</td>
+                        <td>
+                          <span className="badge badge-danger">
+                            <TrendingUp size={12} />
+                            +{rec.recommended_ce_pct ?? "--"}%
+                          </span>
+                        </td>
+                        <td>
+                          <span className="badge badge-success">
+                            <TrendingDown size={12} />
+                            -{rec.recommended_pe_pct ?? "--"}%
+                          </span>
+                        </td>
+                        <td>
+                          <div className="table-symbol">
+                            <strong>
+                              {formatPrice(peStrike)} to {formatPrice(ceStrike)}
+                            </strong>
+                            <span>From current spot</span>
+                          </div>
+                        </td>
+                        <td className="mono">{formatPercent(rec.combined_probability)}</td>
+                        <td className="mono">
+                          {rec.expected_return !== null
+                            ? `Rs ${rec.expected_return.toLocaleString("en-IN", {
+                                maximumFractionDigits: 2,
+                              })}`
+                            : "--"}
                         </td>
                       </tr>
                     );
@@ -364,15 +313,11 @@ export default function DashboardOverview() {
               </tbody>
             </table>
           </div>
-        </div>
+        </section>
       </div>
     </>
   );
 }
-
-// =============================================================================
-// MetricCard Component
-// =============================================================================
 
 function MetricCard({
   label,
@@ -387,32 +332,17 @@ function MetricCard({
 }) {
   return (
     <div className="metric-card">
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "flex-start",
-        }}
-      >
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
         <div>
           <div className="metric-label">{label}</div>
           <div className="metric-value">{value}</div>
-          {badge && (
+          {badge ? (
             <span className={`badge badge-${badge.variant}`} style={{ marginTop: 8 }}>
               {badge.text}
             </span>
-          )}
+          ) : null}
         </div>
-        <div
-          style={{
-            padding: 10,
-            borderRadius: "var(--radius-md)",
-            background: "var(--bg-tertiary)",
-            color: "var(--accent-blue)",
-          }}
-        >
-          {icon}
-        </div>
+        <div className="metric-icon-shell">{icon}</div>
       </div>
     </div>
   );

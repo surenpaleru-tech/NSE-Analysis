@@ -50,6 +50,10 @@ export async function fetchOverview() {
     symbols_tracked: number;
     latest_recommendations: number;
     latest_date: string | null;
+    avg_probability: number | null;
+    avg_expected_return: number | null;
+    current_market_regime: string | null;
+    top_symbol: string | null;
   }>("/api/v1/dashboard/overview");
 }
 
@@ -68,6 +72,48 @@ export async function fetchMonthlyIndex(limit = 20) {
 export async function fetchStockRecommendations(sortBy = "expected_return", limit = 200) {
   return apiFetch<RankedRecommendation[]>("/api/v1/dashboard/stocks", {
     params: { sort_by: sortBy, limit },
+  });
+}
+
+export async function fetchProjectionBoard(options?: {
+  instrumentType?: "index" | "stock";
+  expiryType?: "weekly" | "monthly";
+  analysisPeriod?: "3m" | "6m" | "1y" | "2y" | "all";
+  optimizationMode?: "expected_value" | "win_rate" | "sharpe_ratio" | "min_drawdown";
+  sortBy?: "projection_score" | "combined_probability" | "expected_value_pct" | "sharpe_ratio" | "trade_count";
+  search?: string;
+  limit?: number;
+}) {
+  return apiFetch<ProjectionBoardResponse>("/api/v1/dashboard/projection-board", {
+    params: {
+      instrument_type: options?.instrumentType,
+      expiry_type: options?.expiryType ?? "monthly",
+      analysis_period: options?.analysisPeriod ?? "1y",
+      optimization_mode: options?.optimizationMode ?? "expected_value",
+      sort_by: options?.sortBy ?? "projection_score",
+      search: options?.search,
+      limit: options?.limit ?? 250,
+    },
+  });
+}
+
+export async function fetchFuturesOutlook(options?: {
+  instrumentType?: "index" | "stock";
+  horizonMonths?: 1 | 2 | 3;
+  lookbackMonths?: 6 | 12 | 24;
+  sortBy?: "signal_score" | "win_rate" | "avg_move_pct";
+  search?: string;
+  limit?: number;
+}) {
+  return apiFetch<FuturesOutlookResponse>("/api/v1/dashboard/futures-outlook", {
+    params: {
+      instrument_type: options?.instrumentType,
+      horizon_months: options?.horizonMonths ?? 2,
+      lookback_months: options?.lookbackMonths ?? 12,
+      sort_by: options?.sortBy ?? "signal_score",
+      search: options?.search,
+      limit: options?.limit ?? 200,
+    },
   });
 }
 
@@ -314,4 +360,98 @@ export interface Opportunity {
   expected_return: number | null;
   risk_score: number | null;
   market_regime: string | null;
+}
+
+export interface ProjectionBoardResponse {
+  filters: {
+    instrument_type: string;
+    expiry_type: string;
+    analysis_period: string;
+    optimization_mode: string;
+    sort_by: string;
+    search: string;
+    limit: number;
+  };
+  summary: {
+    symbols: number;
+    avg_probability: number | null;
+    avg_range_width_pct: number | null;
+    best_symbol: string | null;
+    best_score: number | null;
+    spot_date: string | null;
+    vix: number | null;
+    vix_date: string | null;
+  };
+  projections: ProjectionRow[];
+}
+
+export interface ProjectionRow {
+  symbol: string;
+  instrument_type: string;
+  expiry_type: string;
+  analysis_period: string;
+  optimization_mode: string;
+  spot_price: number | null;
+  spot_date: string | null;
+  recommended_ce_pct: number | null;
+  recommended_pe_pct: number | null;
+  recommended_ce_strike: number | null;
+  recommended_pe_strike: number | null;
+  ce_probability: number | null;
+  pe_probability: number | null;
+  combined_probability: number | null;
+  expected_value: number | null;
+  expected_value_pct: number | null;
+  sharpe_ratio: number | null;
+  sortino_ratio: number | null;
+  max_drawdown: number | null;
+  kelly_criterion: number | null;
+  trade_count: number;
+  last_expiry: string | null;
+  projection_score: number | null;
+  range_width_pct: number | null;
+  market_regime: string | null;
+  current_vix: number | null;
+}
+
+export interface FuturesOutlookResponse {
+  filters: {
+    instrument_type: string;
+    horizon_months: number;
+    lookback_months: number;
+    sort_by: string;
+    search: string;
+    limit: number;
+  };
+  summary: {
+    symbols: number;
+    bullish: number;
+    bearish: number;
+    neutral: number;
+    best_symbol: string | null;
+    best_score: number | null;
+    spot_date: string | null;
+  };
+  methodology: string;
+  rows: FuturesOutlookRow[];
+}
+
+export interface FuturesOutlookRow {
+  symbol: string;
+  instrument_type: string;
+  spot_price: number | null;
+  spot_date: string | null;
+  bias: "bullish" | "bearish" | "neutral";
+  setup: string;
+  target_price: number | null;
+  upside_case_price: number | null;
+  downside_case_price: number | null;
+  avg_move_pct: number | null;
+  median_move_pct: number | null;
+  upside_case_pct: number | null;
+  downside_case_pct: number | null;
+  win_rate: number | null;
+  volatility_pct: number | null;
+  sample_size: number;
+  signal_score: number | null;
 }

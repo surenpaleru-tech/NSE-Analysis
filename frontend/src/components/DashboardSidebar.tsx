@@ -2,24 +2,32 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
 import {
   BarChart3,
   Calendar,
-  MessageSquare,
-  TrendingUp,
-  Crosshair,
-  Shield,
+  CandlestickChart,
   Bell,
-  Settings,
-  Zap,
+  Crosshair,
   LayoutDashboard,
+  MessageSquare,
+  Radar,
+  Settings,
+  Shield,
+  TrendingUp,
+  Waves,
+  Zap,
 } from "lucide-react";
+
+import { fetchOverview } from "@/lib/api";
 
 const navItems = [
   {
     section: "Dashboards",
     items: [
       { href: "/dashboard", label: "Overview", icon: LayoutDashboard },
+      { href: "/dashboard/projections", label: "Projection Board", icon: Radar },
+      { href: "/dashboard/futures", label: "Futures Outlook", icon: CandlestickChart },
       { href: "/dashboard/weekly", label: "Weekly Index", icon: Calendar },
       { href: "/dashboard/monthly", label: "Monthly Index", icon: TrendingUp },
       { href: "/dashboard/stocks", label: "Stocks", icon: BarChart3 },
@@ -43,27 +51,64 @@ const navItems = [
   },
 ];
 
+interface SidebarOverview {
+  latest_vix: number | null;
+  current_market_regime: string | null;
+  latest_date: string | null;
+}
+
 export default function DashboardSidebar() {
   const pathname = usePathname();
+  const [snapshot, setSnapshot] = useState<SidebarOverview>({
+    latest_vix: null,
+    current_market_regime: null,
+    latest_date: null,
+  });
+
+  useEffect(() => {
+    async function loadSnapshot() {
+      try {
+        const overview = await fetchOverview();
+        setSnapshot({
+          latest_vix: overview.latest_vix,
+          current_market_regime: overview.current_market_regime,
+          latest_date: overview.latest_date,
+        });
+      } catch (error) {
+        console.error("Failed to load sidebar snapshot:", error);
+      }
+    }
+
+    loadSnapshot();
+  }, []);
+
+  const vixLabel =
+    snapshot.latest_vix === null
+      ? "Waiting for feed"
+      : snapshot.latest_vix < 15
+        ? "Low volatility"
+        : snapshot.latest_vix > 25
+          ? "High volatility"
+          : "Balanced volatility";
+
+  const vixVariant =
+    snapshot.latest_vix === null
+      ? "info"
+      : snapshot.latest_vix < 15
+        ? "success"
+        : snapshot.latest_vix > 25
+          ? "danger"
+          : "warning";
 
   return (
     <nav className="sidebar">
       <div className="sidebar-logo">
-        <div
-          style={{
-            width: 36, height: 36,
-            borderRadius: "var(--radius-md)",
-            background: "var(--gradient-primary)",
-            display: "flex", alignItems: "center", justifyContent: "center",
-          }}
-        >
-          <Zap size={20} color="white" />
+        <div className="brand-mark">
+          <Waves size={20} color="white" />
         </div>
         <div>
           <h1>NSE Options</h1>
-          <span style={{ fontSize: "0.65rem", color: "var(--text-muted)", letterSpacing: "0.05em" }}>
-            INTELLIGENCE PLATFORM
-          </span>
+          <span className="sidebar-kicker">ANALYSIS WORKSPACE</span>
         </div>
       </div>
 
@@ -71,8 +116,11 @@ export default function DashboardSidebar() {
         <div className="nav-section" key={section.section}>
           <div className="nav-section-title">{section.section}</div>
           {section.items.map((item) => {
-            const isActive = pathname === item.href || (item.href !== "/dashboard" && pathname.startsWith(item.href));
+            const isActive =
+              pathname === item.href ||
+              (item.href !== "/dashboard" && pathname.startsWith(item.href));
             const Icon = item.icon;
+
             return (
               <Link
                 key={item.href}
@@ -88,17 +136,23 @@ export default function DashboardSidebar() {
         </div>
       ))}
 
-      {/* VIX Indicator at bottom */}
-      <div style={{
-        marginTop: "auto",
-        padding: "1rem",
-        background: "var(--bg-tertiary)",
-        borderRadius: "var(--radius-md)",
-        border: "1px solid var(--border-glass)",
-      }}>
-        <div className="metric-label">India VIX</div>
-        <div className="metric-value" style={{ fontSize: "1.5rem" }}>14.82</div>
-        <span className="badge badge-success" style={{ marginTop: "0.5rem" }}>Low Volatility</span>
+      <div className="sidebar-snapshot">
+        <div className="metric-label">Live Snapshot</div>
+        <div className="snapshot-row">
+          <span>India VIX</span>
+          <strong>{snapshot.latest_vix?.toFixed(2) ?? "--"}</strong>
+        </div>
+        <div className="snapshot-row">
+          <span>Regime</span>
+          <strong>{snapshot.current_market_regime ?? "--"}</strong>
+        </div>
+        <div className="snapshot-row">
+          <span>As of</span>
+          <strong>{snapshot.latest_date ?? "--"}</strong>
+        </div>
+        <span className={`badge badge-${vixVariant}`} style={{ marginTop: "0.75rem" }}>
+          {vixLabel}
+        </span>
       </div>
     </nav>
   );
