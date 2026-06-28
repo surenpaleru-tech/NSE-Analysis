@@ -441,6 +441,12 @@ export interface FuturesOutlookRow {
   instrument_type: string;
   spot_price: number | null;
   spot_date: string | null;
+  front_price: number | null;
+  front_expiry: string | null;
+  next_price: number | null;
+  next_expiry: string | null;
+  basis_pct: number | null;
+  roll_yield_pct: number | null;
   bias: "bullish" | "bearish" | "neutral";
   setup: string;
   target_price: number | null;
@@ -454,4 +460,6 @@ export interface FuturesOutlookRow {
   volatility_pct: number | null;
   sample_size: number;
   signal_score: number | null;
+  front_oi?: number | null;
+  front_volume?: number | null;
 }

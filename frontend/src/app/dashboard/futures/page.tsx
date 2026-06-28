@@ -78,21 +78,21 @@ export default function FuturesOutlookPage() {
       <div className="page-header">
         <h1 className="page-title">Futures Outlook</h1>
         <p className="page-subtitle">
-          Directional planning for the next one to three months using stored spot-price history
+          Directional planning for the next one to three months using the stored futures chain
         </p>
       </div>
 
       <div className="page-body">
         <section className="hero-panel animate-fade-in">
           <div className="hero-copy">
-            <span className="hero-eyebrow">Directional proxy</span>
+            <span className="hero-eyebrow">Front-month analytics</span>
             <h2>
-              The current pipeline does not store a dedicated futures chain yet, so this workspace
-              turns underlying spot history into a futures-friendly directional map.
+              Track real front-month futures behavior, basis, and roll shape across the active F&O
+              universe.
             </h2>
             <p>
-              Use it to shortlist long, short, or wait setups before we wire the pipeline for full
-              futures-specific analytics.
+              This view now prefers database-backed futures-chain data and only falls back when the
+              live store has not been backfilled yet.
             </p>
           </div>
           <div className="hero-stat-strip">
@@ -132,7 +132,7 @@ export default function FuturesOutlookPage() {
           />
           <MetricTile
             label="Method"
-            value="Spot proxy"
+            value={data?.methodology === "front_month_futures" ? "Futures chain" : "Spot proxy"}
             icon={<TrendingUp size={18} />}
             note={data?.methodology ?? "Not loaded"}
           />
@@ -214,9 +214,9 @@ export default function FuturesOutlookPage() {
         </section>
 
         <section className="note-banner">
-          Futures outlook currently uses the database&apos;s spot history as a directional proxy.
-          Once the pipeline begins storing futures chains, this page can be upgraded to true
-          contract-level analytics without changing the user workflow.
+          Signal quality improves once the pipeline backfills enough futures history. Basis and
+          roll-yield columns use the latest front and next contracts when available in the
+          database.
         </section>
 
         <section className="glass-card" style={{ padding: "1.25rem", marginTop: "1rem" }}>
@@ -236,14 +236,15 @@ export default function FuturesOutlookPage() {
                 <tr>
                   {[
                     "Symbol",
-                    "Spot",
+                    "Spot / front",
                     "Bias",
                     "Target",
+                    "Basis",
+                    "Roll",
                     "Upside case",
                     "Downside case",
                     "Win rate",
-                    "Average move",
-                    "Volatility",
+                    "Move / vol",
                     "Score",
                   ].map((heading) => (
                     <th key={heading}>{heading}</th>
@@ -254,7 +255,7 @@ export default function FuturesOutlookPage() {
                 {loading ? (
                   Array.from({ length: 10 }).map((_, index) => (
                     <tr key={index}>
-                      {Array.from({ length: 10 }).map((__, cellIndex) => (
+                      {Array.from({ length: 11 }).map((__, cellIndex) => (
                         <td key={cellIndex}>
                           <div className="skeleton" style={{ height: 16, width: "72%" }} />
                         </td>
@@ -263,7 +264,7 @@ export default function FuturesOutlookPage() {
                   ))
                 ) : rows.length === 0 ? (
                   <tr>
-                    <td colSpan={10} className="empty-state-cell">
+                    <td colSpan={11} className="empty-state-cell">
                       No futures outlook rows matched the current filters.
                     </td>
                   </tr>
@@ -292,9 +293,11 @@ function FuturesRowView({ row }: { row: FuturesOutlookRow }) {
         </div>
       </td>
       <td>
-        <div className="table-symbol mono">
-          <strong>{formatPrice(row.spot_price)}</strong>
-          <span>{row.spot_date ?? "--"}</span>
+        <div className="table-symbol">
+          <strong className="mono">{formatPrice(row.spot_price)}</strong>
+          <span className="mono">
+            Front {formatPrice(row.front_price)} {row.front_expiry ? `| ${row.front_expiry}` : ""}
+          </span>
         </div>
       </td>
       <td>
@@ -304,6 +307,18 @@ function FuturesRowView({ row }: { row: FuturesOutlookRow }) {
         </div>
       </td>
       <td className="mono">{formatPrice(row.target_price)}</td>
+      <td>
+        <div className="table-symbol mono">
+          <strong>{formatPct(row.basis_pct)}</strong>
+          <span>{row.front_expiry ?? "--"}</span>
+        </div>
+      </td>
+      <td>
+        <div className="table-symbol mono">
+          <strong>{formatPct(row.roll_yield_pct)}</strong>
+          <span>{row.next_expiry ?? "No next contract"}</span>
+        </div>
+      </td>
       <td>
         <div className="table-symbol mono">
           <strong className="success-text">{formatPrice(row.upside_case_price)}</strong>
@@ -320,10 +335,9 @@ function FuturesRowView({ row }: { row: FuturesOutlookRow }) {
       <td>
         <div className="table-symbol">
           <strong>{formatPct(row.avg_move_pct)}</strong>
-          <span>{formatPct(row.median_move_pct)} median</span>
+          <span>{formatPct(row.volatility_pct)} vol</span>
         </div>
       </td>
-      <td className="mono">{formatPct(row.volatility_pct)}</td>
       <td>
         <div className="score-pill">{row.signal_score?.toFixed(1) ?? "--"}</div>
       </td>

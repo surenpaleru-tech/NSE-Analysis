@@ -9,10 +9,12 @@ from statistics import mean, median, pstdev
 from typing import Any, Optional
 
 from sqlalchemy import and_, func, select
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import (
     DailyRecommendation,
+    FuturesChain,
     FnOUniverse,
     IndiaVIX,
     OptimalSellingBand,
@@ -294,9 +296,11 @@ async def build_options_projection_board(
     }
 
 
-async def build_futures_outlook(
+async def _build_spot_proxy_futures_outlook(
     db: AsyncSession,
     *,
+    symbol_types: dict[str, str],
+    symbols: list[str],
     instrument_type: Optional[str],
     horizon_months: int,
     lookback_months: int,
@@ -304,41 +308,6 @@ async def build_futures_outlook(
     search: Optional[str],
     limit: int,
 ) -> dict[str, Any]:
-    universe_query = select(FnOUniverse.symbol, FnOUniverse.instrument_type).where(
-        FnOUniverse.is_active.is_(True)
-    )
-    if instrument_type:
-        universe_query = universe_query.where(FnOUniverse.instrument_type == instrument_type)
-    if search:
-        universe_query = universe_query.where(FnOUniverse.symbol.ilike(f"%{search.upper()}%"))
-
-    universe_result = await db.execute(universe_query)
-    universe_rows = universe_result.all()
-    symbol_types = {row.symbol: row.instrument_type for row in universe_rows}
-    symbols = list(symbol_types.keys())
-    if not symbols:
-        return {
-            "filters": {
-                "instrument_type": instrument_type or "all",
-                "horizon_months": horizon_months,
-                "lookback_months": lookback_months,
-                "sort_by": sort_by,
-                "search": search or "",
-                "limit": limit,
-            },
-            "summary": {
-                "symbols": 0,
-                "bullish": 0,
-                "bearish": 0,
-                "neutral": 0,
-                "best_symbol": None,
-                "best_score": None,
-                "spot_date": None,
-            },
-            "methodology": "spot_history_proxy",
-            "rows": [],
-        }
-
     latest_spot_subquery = (
         select(
             SpotPrice.symbol.label("symbol"),
@@ -452,7 +421,8 @@ async def build_futures_outlook(
         stability = _clamp((1 - min(volatility, 0.20) / 0.20), 0, 1)
         sample_strength = _clamp(len(forward_returns) / 36, 0, 1)
         signal_score = round(
-            (edge * 0.35 + magnitude * 0.25 + stability * 0.20 + sample_strength * 0.20) * 100,
+            (edge * 0.35 + magnitude * 0.25 + stability * 0.20 + sample_strength * 0.20)
+            * 100,
             2,
         )
 
@@ -462,6 +432,12 @@ async def build_futures_outlook(
                 "instrument_type": symbol_types.get(symbol, "stock"),
                 "spot_price": _round_or_none(latest_close),
                 "spot_date": latest_snapshot["spot_date"] if latest_snapshot else None,
+                "front_price": _round_or_none(latest_close),
+                "front_expiry": None,
+                "next_price": None,
+                "next_expiry": None,
+                "basis_pct": None,
+                "roll_yield_pct": None,
                 "bias": bias,
                 "setup": setup,
                 "target_price": _round_or_none(latest_close * (1 + median_move)),
@@ -506,5 +482,267 @@ async def build_futures_outlook(
             "spot_date": rows[0]["spot_date"] if rows else None,
         },
         "methodology": "spot_history_proxy",
+        "rows": rows,
+    }
+
+
+async def build_futures_outlook(
+    db: AsyncSession,
+    *,
+    instrument_type: Optional[str],
+    horizon_months: int,
+    lookback_months: int,
+    sort_by: str,
+    search: Optional[str],
+    limit: int,
+) -> dict[str, Any]:
+    universe_query = select(FnOUniverse.symbol, FnOUniverse.instrument_type).where(
+        FnOUniverse.is_active.is_(True)
+    )
+    if instrument_type:
+        universe_query = universe_query.where(FnOUniverse.instrument_type == instrument_type)
+    if search:
+        universe_query = universe_query.where(FnOUniverse.symbol.ilike(f"%{search.upper()}%"))
+
+    universe_result = await db.execute(universe_query)
+    universe_rows = universe_result.all()
+    symbol_types = {row.symbol: row.instrument_type for row in universe_rows}
+    symbols = list(symbol_types.keys())
+    if not symbols:
+        return {
+            "filters": {
+                "instrument_type": instrument_type or "all",
+                "horizon_months": horizon_months,
+                "lookback_months": lookback_months,
+                "sort_by": sort_by,
+                "search": search or "",
+                "limit": limit,
+            },
+            "summary": {
+                "symbols": 0,
+                "bullish": 0,
+                "bearish": 0,
+                "neutral": 0,
+                "best_symbol": None,
+                "best_score": None,
+                "spot_date": None,
+            },
+            "methodology": "front_month_futures",
+            "rows": [],
+        }
+    try:
+        latest_futures_date_result = await db.execute(
+            select(func.max(FuturesChain.trade_date)).where(FuturesChain.symbol.in_(symbols))
+        )
+        latest_futures_date = latest_futures_date_result.scalar()
+    except SQLAlchemyError:
+        latest_futures_date = None
+
+    if latest_futures_date is None:
+        return await _build_spot_proxy_futures_outlook(
+            db,
+            symbol_types=symbol_types,
+            symbols=symbols,
+            instrument_type=instrument_type,
+            horizon_months=horizon_months,
+            lookback_months=lookback_months,
+            sort_by=sort_by,
+            search=search,
+            limit=limit,
+        )
+
+    cutoff_date = latest_futures_date - timedelta(days=lookback_months * 31)
+    try:
+        futures_result = await db.execute(
+            select(
+                FuturesChain.symbol,
+                FuturesChain.trade_date,
+                FuturesChain.expiry,
+                FuturesChain.close,
+                FuturesChain.underlying_price,
+                FuturesChain.oi,
+                FuturesChain.volume,
+            )
+            .where(
+                FuturesChain.symbol.in_(symbols),
+                FuturesChain.trade_date >= cutoff_date,
+            )
+            .order_by(FuturesChain.symbol, FuturesChain.trade_date, FuturesChain.expiry)
+        )
+        futures_rows = futures_result.all()
+    except SQLAlchemyError:
+        futures_rows = []
+    if not futures_rows:
+        return await _build_spot_proxy_futures_outlook(
+            db,
+            symbol_types=symbol_types,
+            symbols=symbols,
+            instrument_type=instrument_type,
+            horizon_months=horizon_months,
+            lookback_months=lookback_months,
+            sort_by=sort_by,
+            search=search,
+            limit=limit,
+        )
+
+    grouped_rows: dict[tuple[str, date], list[dict[str, Any]]] = defaultdict(list)
+    for row in futures_rows:
+        grouped_rows[(row.symbol, row.trade_date)].append(
+            {
+                "expiry": row.expiry,
+                "close": _to_float(row.close),
+                "underlying_price": _to_float(row.underlying_price),
+                "oi": int(row.oi or 0),
+                "volume": int(row.volume or 0),
+            }
+        )
+
+    front_series_by_symbol: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    latest_snapshot_by_symbol: dict[str, dict[str, Any]] = {}
+    for (symbol, trade_day), contracts in grouped_rows.items():
+        ordered = sorted(contracts, key=lambda item: item["expiry"])
+        front = next((contract for contract in ordered if contract["close"] is not None), None)
+        if front is None:
+            continue
+        next_contract = next(
+            (contract for contract in ordered if contract["expiry"] > front["expiry"] and contract["close"] is not None),
+            None,
+        )
+        front_series_by_symbol[symbol].append(
+            {
+                "trade_date": trade_day,
+                "close": front["close"],
+                "expiry": front["expiry"],
+                "underlying_price": front["underlying_price"],
+                "oi": front["oi"],
+                "volume": front["volume"],
+                "next_close": next_contract["close"] if next_contract else None,
+                "next_expiry": next_contract["expiry"] if next_contract else None,
+            }
+        )
+
+        if trade_day == latest_futures_date:
+            latest_snapshot_by_symbol[symbol] = front_series_by_symbol[symbol][-1]
+
+    horizon_days = max(21, horizon_months * 21)
+    rows: list[dict[str, Any]] = []
+    for symbol, points in front_series_by_symbol.items():
+        ordered_points = sorted(points, key=lambda item: item["trade_date"])
+        if len(ordered_points) <= horizon_days + 5:
+            continue
+
+        forward_returns = [
+            (ordered_points[idx + horizon_days]["close"] / ordered_points[idx]["close"]) - 1
+            for idx in range(0, len(ordered_points) - horizon_days)
+            if ordered_points[idx]["close"] and ordered_points[idx + horizon_days]["close"]
+        ]
+        if len(forward_returns) < 8:
+            continue
+
+        latest_point = latest_snapshot_by_symbol.get(symbol) or ordered_points[-1]
+        current_front = latest_point["close"]
+        if current_front is None:
+            continue
+
+        avg_move = mean(forward_returns)
+        median_move = median(forward_returns)
+        win_rate = sum(1 for value in forward_returns if value > 0) / len(forward_returns)
+        upside_case = _percentile(forward_returns, 0.75) or avg_move
+        downside_case = _percentile(forward_returns, 0.25) or avg_move
+        volatility = pstdev(forward_returns) if len(forward_returns) > 1 else 0.0
+
+        if win_rate >= 0.58 and avg_move >= 0.01:
+            bias = "bullish"
+            setup = "Long near-month futures"
+        elif win_rate <= 0.42 and avg_move <= -0.01:
+            bias = "bearish"
+            setup = "Short near-month futures"
+        else:
+            bias = "neutral"
+            setup = "Wait / hedge"
+
+        basis_pct = None
+        underlying_price = latest_point["underlying_price"]
+        if underlying_price:
+            basis_pct = ((current_front - underlying_price) / underlying_price) * 100
+        roll_yield_pct = None
+        if latest_point["next_close"]:
+            roll_yield_pct = ((latest_point["next_close"] - current_front) / current_front) * 100
+
+        edge = abs(win_rate - 0.5) * 2
+        magnitude = _clamp(abs(avg_move) / 0.12, 0, 1)
+        stability = _clamp((1 - min(volatility, 0.20) / 0.20), 0, 1)
+        basis_signal = _clamp(abs(basis_pct or 0) / 5, 0, 1)
+        sample_strength = _clamp(len(forward_returns) / 36, 0, 1)
+        signal_score = round(
+            (
+                edge * 0.30
+                + magnitude * 0.22
+                + stability * 0.18
+                + basis_signal * 0.10
+                + sample_strength * 0.20
+            )
+            * 100,
+            2,
+        )
+
+        rows.append(
+            {
+                "symbol": symbol,
+                "instrument_type": symbol_types.get(symbol, "stock"),
+                "spot_price": _round_or_none(underlying_price),
+                "spot_date": str(latest_point["trade_date"]),
+                "front_price": _round_or_none(current_front),
+                "front_expiry": str(latest_point["expiry"]) if latest_point["expiry"] else None,
+                "next_price": _round_or_none(latest_point["next_close"]),
+                "next_expiry": str(latest_point["next_expiry"]) if latest_point["next_expiry"] else None,
+                "basis_pct": _round_or_none(basis_pct),
+                "roll_yield_pct": _round_or_none(roll_yield_pct),
+                "bias": bias,
+                "setup": setup,
+                "target_price": _round_or_none(current_front * (1 + median_move)),
+                "upside_case_price": _round_or_none(current_front * (1 + upside_case)),
+                "downside_case_price": _round_or_none(current_front * (1 + downside_case)),
+                "avg_move_pct": _round_or_none(avg_move * 100),
+                "median_move_pct": _round_or_none(median_move * 100),
+                "upside_case_pct": _round_or_none(upside_case * 100),
+                "downside_case_pct": _round_or_none(downside_case * 100),
+                "win_rate": _round_or_none(win_rate, 4),
+                "volatility_pct": _round_or_none(volatility * 100),
+                "sample_size": len(forward_returns),
+                "signal_score": signal_score,
+                "front_oi": latest_point["oi"],
+                "front_volume": latest_point["volume"],
+            }
+        )
+
+    sorters = {
+        "signal_score": lambda row: row["signal_score"] or 0,
+        "win_rate": lambda row: abs((row["win_rate"] or 0) - 0.5),
+        "avg_move_pct": lambda row: abs(row["avg_move_pct"] or 0),
+    }
+    rows.sort(key=sorters[sort_by], reverse=True)
+    rows = rows[:limit]
+
+    bias_counter = Counter(row["bias"] for row in rows)
+    return {
+        "filters": {
+            "instrument_type": instrument_type or "all",
+            "horizon_months": horizon_months,
+            "lookback_months": lookback_months,
+            "sort_by": sort_by,
+            "search": search or "",
+            "limit": limit,
+        },
+        "summary": {
+            "symbols": len(rows),
+            "bullish": bias_counter.get("bullish", 0),
+            "bearish": bias_counter.get("bearish", 0),
+            "neutral": bias_counter.get("neutral", 0),
+            "best_symbol": rows[0]["symbol"] if rows else None,
+            "best_score": rows[0]["signal_score"] if rows else None,
+            "spot_date": rows[0]["spot_date"] if rows else None,
+        },
+        "methodology": "front_month_futures",
         "rows": rows,
     }
