@@ -138,9 +138,9 @@ async def get_strategy_history(
         )
     )
 
-    if expiry_dates:
-        ongoing_expiry = expiry_dates[0]
-        query = query.where(StrategyResult.expiry <= ongoing_expiry)
+    if latest_trade_date:
+        # Completed history should only include expiries that are already over.
+        query = query.where(StrategyResult.expiry <= latest_trade_date)
 
     if ce_pct is not None:
         query = query.where(StrategyResult.ce_pct == ce_pct)
