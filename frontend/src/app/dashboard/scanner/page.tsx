@@ -503,32 +503,54 @@ export default function ScannerPage() {
                         </thead>
                         <tbody>
                           {displayHistory.map((record, index) => {
+                            const recordExpiryDate = new Date(record.expiry);
+                            recordExpiryDate.setHours(23, 59, 59, 999);
+                            const isOngoing = recordExpiryDate >= new Date();
+
+                            const spot_exit = isOngoing ? (record.spot_at_expiry ?? activeExpiryData?.spot) : record.spot_at_expiry;
+                            const ce_exit = isOngoing ? (record.ce_expiry_premium ?? activeExpiryData?.ce_premium) : record.ce_expiry_premium;
+                            const pe_exit = isOngoing ? (record.pe_expiry_premium ?? activeExpiryData?.pe_premium) : record.pe_expiry_premium;
+                            const ce_entry = record.ce_entry_premium;
+                            const pe_entry = record.pe_entry_premium;
+
+                            let returnPct = record.return_pct;
+                            if (isOngoing && (returnPct === null || returnPct === undefined)) {
+                              if (ce_entry && pe_entry && ce_exit !== null && ce_exit !== undefined && pe_exit !== null && pe_exit !== undefined) {
+                                const entryTotal = ce_entry + pe_entry;
+                                const runningPnL = (ce_entry - ce_exit) + (pe_entry - pe_exit);
+                                returnPct = entryTotal > 0 ? (runningPnL / entryTotal) * 100 : 0;
+                              }
+                            }
+
                             return (
                               <tr key={index} style={{ borderBottom: "1px solid rgba(255, 255, 255, 0.04)" }}>
                                 <td style={{ padding: "0.75rem 0.5rem", color: "var(--text-secondary)", fontWeight: 500 }}>
                                   {new Date(record.expiry).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}
                                 </td>
                                 <td style={{ padding: "0.75rem 0.5rem", textAlign: "right", fontFamily: "var(--font-mono)", color: "var(--text-secondary)" }}>
-                                  {record.spot_at_entry !== null && record.spot_at_entry !== undefined ? record.spot_at_entry.toFixed(0) : "-"} → {record.spot_at_expiry !== null && record.spot_at_expiry !== undefined ? record.spot_at_expiry.toFixed(0) : "-"}
+                                  {record.spot_at_entry !== null && record.spot_at_entry !== undefined ? record.spot_at_entry.toFixed(0) : "-"} → {spot_exit !== null && spot_exit !== undefined ? spot_exit.toFixed(0) : "-"}
                                 </td>
                                 <td style={{ padding: "0.75rem 0.5rem", textAlign: "right", fontFamily: "var(--font-mono)", color: "var(--text-secondary)" }}>
-                                  {record.ce_entry_premium !== null && record.ce_entry_premium !== undefined ? record.ce_entry_premium.toFixed(1) : "-"} → {record.ce_expiry_premium !== null && record.ce_expiry_premium !== undefined ? record.ce_expiry_premium.toFixed(1) : "-"}
+                                  {ce_entry !== null && ce_entry !== undefined ? ce_entry.toFixed(1) : "-"} → {ce_exit !== null && ce_exit !== undefined ? ce_exit.toFixed(1) : "-"}
                                 </td>
                                 <td style={{ padding: "0.75rem 0.5rem", textAlign: "right", fontFamily: "var(--font-mono)", color: "var(--text-secondary)" }}>
-                                  {record.pe_entry_premium !== null && record.pe_entry_premium !== undefined ? record.pe_entry_premium.toFixed(1) : "-"} → {record.pe_expiry_premium !== null && record.pe_expiry_premium !== undefined ? record.pe_expiry_premium.toFixed(1) : "-"}
+                                  {pe_entry !== null && pe_entry !== undefined ? pe_entry.toFixed(1) : "-"} → {pe_exit !== null && pe_exit !== undefined ? pe_exit.toFixed(1) : "-"}
                                 </td>
                                 <td style={{
                                   padding: "0.75rem 0.5rem",
                                   textAlign: "right",
                                   fontFamily: "var(--font-mono)",
                                   fontWeight: 700,
-                                  color: record.return_pct !== null && record.return_pct !== undefined
-                                    ? (record.return_pct >= 0 ? "var(--accent-emerald)" : "var(--accent-red)")
+                                  color: returnPct !== null && returnPct !== undefined
+                                    ? (returnPct >= 0 ? "var(--accent-emerald)" : "var(--accent-red)")
                                     : "var(--text-muted)"
                                 }}>
-                                  {record.return_pct !== null && record.return_pct !== undefined
-                                    ? `${record.return_pct >= 0 ? "+" : ""}${record.return_pct.toFixed(1)}%`
+                                  {returnPct !== null && returnPct !== undefined
+                                    ? `${returnPct >= 0 ? "+" : ""}${returnPct.toFixed(1)}%`
                                     : "Ongoing"}
+                                  {isOngoing && returnPct !== null && returnPct !== undefined && (
+                                    <span style={{ fontSize: "0.7rem", fontWeight: 500, color: "var(--text-muted)", marginLeft: "0.25rem" }}>(Ongoing)</span>
+                                  )}
                                 </td>
                               </tr>
                             );
