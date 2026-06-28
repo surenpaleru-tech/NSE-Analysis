@@ -105,6 +105,26 @@ export default function ScannerPage() {
   // Retrieve active tab's calculated strikes and premiums (LTP)
   const activeExpiryData = expiriesInfo ? expiriesInfo[activeExpiryTab] : null;
 
+  // Construct ongoing record dynamically if activeExpiryData is available and it is the ongoing tab
+  const ongoingRecord = (activeExpiryTab === "ongoing" && activeExpiryData) ? {
+    expiry: activeExpiryData.expiry_date,
+    spot_at_entry: activeExpiryData.spot,
+    spot_at_expiry: null,
+    ce_entry_premium: activeExpiryData.ce_premium,
+    ce_expiry_premium: null,
+    pe_entry_premium: activeExpiryData.pe_premium,
+    pe_expiry_premium: null,
+    return_pct: null,
+  } : null;
+
+  const filteredHistory = ongoingRecord 
+    ? history.filter(h => h.expiry !== ongoingRecord.expiry)
+    : history;
+
+  const displayHistory = ongoingRecord 
+    ? [ongoingRecord, ...filteredHistory]
+    : filteredHistory;
+
   return (
     <>
       <div className="page-header">
@@ -466,7 +486,7 @@ export default function ScannerPage() {
 
                   {/* Scrollable Backtest Table */}
                   <div style={{ flex: 1, overflowY: "auto", paddingRight: "0.25rem" }}>
-                    {history.length === 0 ? (
+                    {displayHistory.length === 0 ? (
                       <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "2rem", color: "var(--text-muted)", textAlign: "center" }}>
                         <p style={{ fontSize: "0.9rem" }}>No backtest strategy results found for this specific CE/PE percentage combination.</p>
                       </div>
@@ -482,14 +502,14 @@ export default function ScannerPage() {
                           </tr>
                         </thead>
                         <tbody>
-                          {history.map((record, index) => {
+                          {displayHistory.map((record, index) => {
                             return (
                               <tr key={index} style={{ borderBottom: "1px solid rgba(255, 255, 255, 0.04)" }}>
                                 <td style={{ padding: "0.75rem 0.5rem", color: "var(--text-secondary)", fontWeight: 500 }}>
                                   {new Date(record.expiry).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}
                                 </td>
                                 <td style={{ padding: "0.75rem 0.5rem", textAlign: "right", fontFamily: "var(--font-mono)", color: "var(--text-secondary)" }}>
-                                  {record.spot_at_entry?.toFixed(0)} → {record.spot_at_expiry?.toFixed(0)}
+                                  {record.spot_at_entry !== null && record.spot_at_entry !== undefined ? record.spot_at_entry.toFixed(0) : "-"} → {record.spot_at_expiry !== null && record.spot_at_expiry !== undefined ? record.spot_at_expiry.toFixed(0) : "-"}
                                 </td>
                                 <td style={{ padding: "0.75rem 0.5rem", textAlign: "right", fontFamily: "var(--font-mono)", color: "var(--text-secondary)" }}>
                                   {record.ce_entry_premium !== null && record.ce_entry_premium !== undefined ? record.ce_entry_premium.toFixed(1) : "-"} → {record.ce_expiry_premium !== null && record.ce_expiry_premium !== undefined ? record.ce_expiry_premium.toFixed(1) : "-"}
@@ -502,9 +522,13 @@ export default function ScannerPage() {
                                   textAlign: "right",
                                   fontFamily: "var(--font-mono)",
                                   fontWeight: 700,
-                                  color: (record.return_pct ?? 0) >= 0 ? "var(--accent-emerald)" : "var(--accent-red)"
+                                  color: record.return_pct !== null && record.return_pct !== undefined
+                                    ? (record.return_pct >= 0 ? "var(--accent-emerald)" : "var(--accent-red)")
+                                    : "var(--text-muted)"
                                 }}>
-                                  {(record.return_pct ?? 0) >= 0 ? "+" : ""}{(record.return_pct ?? 0).toFixed(1)}%
+                                  {record.return_pct !== null && record.return_pct !== undefined
+                                    ? `${record.return_pct >= 0 ? "+" : ""}${record.return_pct.toFixed(1)}%`
+                                    : "Ongoing"}
                                 </td>
                               </tr>
                             );

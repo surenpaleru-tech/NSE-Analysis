@@ -114,28 +114,43 @@ async def get_strategy_history(
     limit: int = Query(default=52, le=200),
 ):
     """Get historical strategy results for a symbol."""
+    # Get latest available trade date in option chain for this symbol (LTP calculation)
+    max_date_q = select(func.max(OptionChain.trade_date)).where(OptionChain.symbol == symbol.upper())
+    max_date_res = await db.execute(max_date_q)
+    latest_trade_date = max_date_res.scalar()
+
+    # Get available expiries on latest_trade_date matching the expiry type
+    expiry_dates = []
+    if latest_trade_date:
+        exp_q = select(OptionChain.expiry).where(
+            OptionChain.symbol == symbol.upper(),
+            OptionChain.trade_date == latest_trade_date,
+            OptionChain.expiry_type == expiry_type
+        ).distinct().order_by(OptionChain.expiry)
+        exp_res = await db.execute(exp_q)
+        expiry_dates = [row[0] for row in exp_res.all()]
+
     query = (
         select(StrategyResult)
         .where(
             StrategyResult.symbol == symbol.upper(),
             StrategyResult.expiry_type == expiry_type,
         )
-        .order_by(desc(StrategyResult.expiry))
-        .limit(limit)
     )
+
+    if expiry_dates:
+        ongoing_expiry = expiry_dates[0]
+        query = query.where(StrategyResult.expiry <= ongoing_expiry)
 
     if ce_pct is not None:
         query = query.where(StrategyResult.ce_pct == ce_pct)
     if pe_pct is not None:
         query = query.where(StrategyResult.pe_pct == pe_pct)
 
+    query = query.order_by(desc(StrategyResult.expiry)).limit(limit)
+
     result = await db.execute(query)
     results = result.scalars().all()
-
-    # Get latest available trade date in option chain for this symbol (LTP calculation)
-    max_date_q = select(func.max(OptionChain.trade_date)).where(OptionChain.symbol == symbol.upper())
-    max_date_res = await db.execute(max_date_q)
-    latest_trade_date = max_date_res.scalar()
 
     # Get current spot price at latest_trade_date
     current_spot = None
@@ -156,17 +171,6 @@ async def get_strategy_history(
             current_spot = fall_res.scalar()
             
     current_spot = float(current_spot) if current_spot else None
-
-    # Get available expiries on latest_trade_date matching the expiry type
-    expiry_dates = []
-    if latest_trade_date:
-        exp_q = select(OptionChain.expiry).where(
-            OptionChain.symbol == symbol.upper(),
-            OptionChain.trade_date == latest_trade_date,
-            OptionChain.expiry_type == expiry_type
-        ).distinct().order_by(OptionChain.expiry)
-        exp_res = await db.execute(exp_q)
-        expiry_dates = [row[0] for row in exp_res.all()]
 
     expiries_info = {}
     if current_spot and len(expiry_dates) >= 1:
