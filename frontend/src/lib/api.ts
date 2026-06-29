@@ -221,6 +221,12 @@ export async function fetchComparison(symbols: string, expiryType = "monthly") {
   });
 }
 
+export async function fetchOptionHistory(symbol: string, expiryType = "monthly", limit = 6) {
+  return apiFetch<OptionHistoryResponse>(`/api/v1/analytics/option-history/${symbol}`, {
+    params: { expiry_type: expiryType, limit },
+  });
+}
+
 // =============================================================================
 // Scanner API
 // =============================================================================
@@ -462,4 +468,28 @@ export interface FuturesOutlookRow {
   signal_score: number | null;
   front_oi?: number | null;
   front_volume?: number | null;
+}
+
+export interface OptionHistoryResponse {
+  symbol: string;
+  expiry_type: string;
+  expiries: OptionHistoryExpiry[];
+}
+
+export interface OptionHistoryExpiry {
+  expiry_date: string;
+  expiry_label: string;
+  ce_strike: number;
+  pe_strike: number;
+  ce_pct: number;
+  pe_pct: number;
+  spot_at_entry: number;
+  daily_data: OptionHistoryDaily[];
+}
+
+export interface OptionHistoryDaily {
+  trade_date: string;
+  spot_price: number | null;
+  ce_close: number;
+  pe_close: number;
 }

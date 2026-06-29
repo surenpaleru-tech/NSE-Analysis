@@ -10,6 +10,7 @@ import {
   Bell,
   Crosshair,
   LayoutDashboard,
+  LineChart,
   MessageSquare,
   Radar,
   Settings,
@@ -38,6 +39,7 @@ const navItems = [
     items: [
       { href: "/dashboard/explorer", label: "Band Explorer", icon: Crosshair },
       { href: "/dashboard/scanner", label: "Scanner", icon: Zap },
+      { href: "/dashboard/option-history", label: "Option History", icon: LineChart },
       { href: "/dashboard/risk", label: "Risk", icon: Shield },
     ],
   },

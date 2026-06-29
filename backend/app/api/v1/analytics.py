@@ -6,7 +6,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, Query, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, desc, func, and_
+from sqlalchemy import select, desc, func, and_, distinct
 
 from app.core.database import get_db
 from app.models import StrategyResult, OptimalSellingBand, OptionChain, SpotPrice
@@ -329,4 +329,206 @@ async def compare_symbols(
             }
             for b in bands
         ],
+    }
+
+
+@router.get("/option-history/{symbol}")
+async def get_option_history(
+    symbol: str,
+    db: AsyncSession = Depends(get_db),
+    expiry_type: str = Query(default="monthly", enum=["weekly", "monthly"]),
+    limit: int = Query(default=6, le=12),
+):
+    """
+    Get day-by-day closing price changes of recommended CE and PE options 
+    along with spot price for the last few expiries of a stock.
+    """
+    from datetime import date, timedelta
+
+    # 1. Fetch unique expiries for the given symbol and expiry_type (chronological desc up to limit)
+    expiries_query = (
+        select(distinct(OptionChain.expiry))
+        .where(
+            OptionChain.symbol == symbol.upper(),
+            OptionChain.expiry_type == expiry_type,
+        )
+        .order_by(desc(distinct(OptionChain.expiry)))
+        .limit(limit)
+    )
+    res = await db.execute(expiries_query)
+    expiry_dates = [row[0] for row in res.all()]
+
+    if not expiry_dates:
+        return {
+            "symbol": symbol.upper(),
+            "expiry_type": expiry_type,
+            "expiries": []
+        }
+
+    # Sort chronological ascending for tabs
+    expiry_dates.sort()
+
+    # 2. Fetch recommended CE / PE percentages for calculations
+    band_q = select(OptimalSellingBand).where(
+        OptimalSellingBand.symbol == symbol.upper(),
+        OptimalSellingBand.expiry_type == expiry_type,
+        OptimalSellingBand.optimization_mode == "expected_value",
+        OptimalSellingBand.analysis_period == "1y",
+        OptimalSellingBand.vix_regime.is_(None),
+        OptimalSellingBand.market_regime.is_(None),
+    )
+    band_res = await db.execute(band_q)
+    band = band_res.scalars().first()
+
+    ce_pct = float(band.recommended_ce_pct) if (band and band.recommended_ce_pct) else 2.0
+    pe_pct = float(band.recommended_pe_pct) if (band and band.recommended_pe_pct) else 1.0
+
+    expiries_data = []
+
+    for exp_date in expiry_dates:
+        # Determine entry date
+        if expiry_type == "weekly":
+            entry_q = select(func.min(OptionChain.trade_date)).where(
+                OptionChain.symbol == symbol.upper(),
+                OptionChain.expiry == exp_date,
+            )
+            entry_res = await db.execute(entry_q)
+            entry_date = entry_res.scalar()
+        else:
+            # Previous monthly expiry
+            prev_q = (
+                select(distinct(OptionChain.expiry))
+                .where(
+                    OptionChain.symbol == symbol.upper(),
+                    OptionChain.expiry_type == "monthly",
+                    OptionChain.expiry < exp_date,
+                )
+                .order_by(desc(distinct(OptionChain.expiry)))
+                .limit(1)
+            )
+            prev_res = await db.execute(prev_q)
+            prev_expiry = prev_res.scalar()
+
+            if prev_expiry:
+                entry_q = select(func.min(OptionChain.trade_date)).where(
+                    OptionChain.symbol == symbol.upper(),
+                    OptionChain.expiry == exp_date,
+                    OptionChain.trade_date > prev_expiry,
+                )
+            else:
+                entry_q = select(func.min(OptionChain.trade_date)).where(
+                    OptionChain.symbol == symbol.upper(),
+                    OptionChain.expiry == exp_date,
+                    OptionChain.trade_date >= (exp_date - timedelta(days=30)),
+                )
+            entry_res = await db.execute(entry_q)
+            entry_date = entry_res.scalar()
+
+        if not entry_date:
+            continue
+
+        # Get spot price at entry date
+        spot_q = select(SpotPrice.close).where(
+            SpotPrice.symbol == symbol.upper(),
+            SpotPrice.date == entry_date,
+        )
+        spot_res = await db.execute(spot_q)
+        spot_at_entry = spot_res.scalar()
+
+        if not spot_at_entry:
+            # Fallback to option chain underlying_price on entry date
+            fall_q = select(OptionChain.underlying_price).where(
+                OptionChain.symbol == symbol.upper(),
+                OptionChain.expiry == exp_date,
+                OptionChain.trade_date == entry_date,
+            ).limit(1)
+            fall_res = await db.execute(fall_q)
+            spot_at_entry = fall_res.scalar()
+
+        if not spot_at_entry:
+            continue
+
+        spot_at_entry = float(spot_at_entry)
+
+        # Calculate target strikes
+        target_ce = spot_at_entry * (1 + ce_pct / 100)
+        target_pe = spot_at_entry * (1 - pe_pct / 100)
+
+        # Find closest actual strikes traded on entry date
+        strikes_q = select(OptionChain.strike, OptionChain.option_type).where(
+            OptionChain.symbol == symbol.upper(),
+            OptionChain.expiry == exp_date,
+            OptionChain.trade_date == entry_date,
+        )
+        strikes_res = await db.execute(strikes_q)
+        rows = strikes_res.all()
+
+        ce_strikes = [float(r[0]) for r in rows if r[1] == "CE"]
+        pe_strikes = [float(r[0]) for r in rows if r[1] == "PE"]
+
+        if not ce_strikes or not pe_strikes:
+            continue
+
+        ce_strike = min(ce_strikes, key=lambda x: abs(x - target_ce))
+        pe_strike = min(pe_strikes, key=lambda x: abs(x - target_pe))
+
+        # Query daily closes for selected CE and PE
+        ce_daily = select(OptionChain.trade_date, OptionChain.close, OptionChain.underlying_price).where(
+            OptionChain.symbol == symbol.upper(),
+            OptionChain.expiry == exp_date,
+            OptionChain.strike == ce_strike,
+            OptionChain.option_type == "CE",
+            OptionChain.trade_date >= entry_date,
+        ).order_by(OptionChain.trade_date)
+
+        pe_daily = select(OptionChain.trade_date, OptionChain.close).where(
+            OptionChain.symbol == symbol.upper(),
+            OptionChain.expiry == exp_date,
+            OptionChain.strike == pe_strike,
+            OptionChain.option_type == "PE",
+            OptionChain.trade_date >= entry_date,
+        ).order_by(OptionChain.trade_date)
+
+        ce_d_res = await db.execute(ce_daily)
+        pe_d_res = await db.execute(pe_daily)
+
+        ce_rows = ce_d_res.all()
+        pe_rows = pe_d_res.all()
+
+        daily_dict = {}
+        for r_date, close_p, spot_p in ce_rows:
+            daily_dict[r_date] = {
+                "trade_date": str(r_date),
+                "spot_price": float(spot_p) if spot_p else None,
+                "ce_close": float(close_p) if close_p is not None else 0.0,
+                "pe_close": 0.0,
+            }
+        for r_date, close_p in pe_rows:
+            if r_date in daily_dict:
+                daily_dict[r_date]["pe_close"] = float(close_p) if close_p is not None else 0.0
+            else:
+                daily_dict[r_date] = {
+                    "trade_date": str(r_date),
+                    "spot_price": None,
+                    "ce_close": 0.0,
+                    "pe_close": float(close_p) if close_p is not None else 0.0,
+                }
+
+        daily_data = [daily_dict[d] for d in sorted(daily_dict.keys())]
+
+        expiries_data.append({
+            "expiry_date": str(exp_date),
+            "expiry_label": exp_date.strftime("%d %b %Y"),
+            "ce_strike": ce_strike,
+            "pe_strike": pe_strike,
+            "ce_pct": ce_pct,
+            "pe_pct": pe_pct,
+            "spot_at_entry": spot_at_entry,
+            "daily_data": daily_data,
+        })
+
+    return {
+        "symbol": symbol.upper(),
+        "expiry_type": expiry_type,
+        "expiries": expiries_data,
     }
