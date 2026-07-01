@@ -4,6 +4,24 @@
 # =============================================================================
 
 services:
+  
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: nse-pgadmin
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@example.com
+      PGADMIN_DEFAULT_PASSWORD: admin123
+    ports:
+      - "5050:80"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    depends_on:
+      - postgres
+    networks:
+      - nse-network
+  
+  
   # ---------------------------------------------------------------------------
   # PostgreSQL 16 with pgvector
   # ---------------------------------------------------------------------------
@@ -122,6 +140,8 @@ volumes:
   ollama_data:
     driver: local
   backend_data:
+    driver: local
+  pgadmin_data:
     driver: local
 
 # =============================================================================
