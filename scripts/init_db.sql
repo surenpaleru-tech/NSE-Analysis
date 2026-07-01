@@ -153,9 +153,18 @@ CREATE TABLE IF NOT EXISTS optimal_selling_bands (
     vix_regime                      VARCHAR(10),
     market_regime                   VARCHAR(15),
     optimization_mode               VARCHAR(20) NOT NULL DEFAULT 'expected_value',
-    last_updated                    TIMESTAMPTZ DEFAULT NOW(),
-    UNIQUE(symbol, instrument_type, expiry_type, analysis_period,
-           COALESCE(vix_regime, ''), COALESCE(market_regime, ''), optimization_mode)
+    last_updated                    TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_optimal_selling_bands_unique
+ON optimal_selling_bands (
+    symbol,
+    instrument_type,
+    expiry_type,
+    analysis_period,
+    COALESCE(vix_regime, ''),
+    COALESCE(market_regime, ''),
+    optimization_mode
 );
 
 -- Daily recommendations
