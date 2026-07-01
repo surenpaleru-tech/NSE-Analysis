@@ -1,0 +1,27 @@
+version: "3.9"
+
+services:
+  pipeline:
+    build:
+      context: ./pipeline
+      dockerfile: Dockerfile
+    container_name: nse-pipeline
+    restart: "no"
+    env_file:
+      - .env
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:${POSTGRES_PORT}/${POSTGRES_DB}
+      - APP_ENV=${APP_ENV:-production}
+      - APP_DEBUG=${APP_DEBUG:-false}
+      - NSE_RATE_LIMIT=${NSE_RATE_LIMIT:-3}
+      - BACKFILL_DAYS=${BACKFILL_DAYS:-365}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - nse-network
+    command: python run_pipeline.py
+
+networks:
+  nse-network:
+    driver: bridge
