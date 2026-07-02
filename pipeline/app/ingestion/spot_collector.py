@@ -99,9 +99,9 @@ class SpotCollector:
         record = {
             "date": trade_date,
             "symbol": symbol,
-            "open": open_price,
-            "high": high_price,
-            "low": low_price,
+            "open": open_price if open_price is not None else close_price,
+            "high": high_price if high_price is not None else close_price,
+            "low": low_price if low_price is not None else close_price,
             "close": close_price,
             "volume": None,
         }
