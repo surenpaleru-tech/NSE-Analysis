@@ -20,11 +20,11 @@ mkdir -p "$LOG_DIR"
 LOG_FILE="$LOG_DIR/pipeline_cron.log"
 
 CRON_ENTRY="CRON_TZ=Asia/Kolkata
-0 19 * * 1-5 cd '$PROJECT_ROOT' && $DOCKER_PATH compose -f docker-compose.pipeline.yml run --rm pipeline >> '$LOG_FILE' 2>&1"
+0 19 * * 1-5 cd '$PROJECT_ROOT' && $DOCKER_PATH compose -f docker-compose.yml -f docker-compose.pipeline.yml run --rm pipeline >> '$LOG_FILE' 2>&1"
 
 # Preserve existing crontab entries, but remove any previous pipeline entry from this project.
-if crontab -l 2>/dev/null | grep -q -F "$PROJECT_ROOT/docker-compose.pipeline.yml run --rm pipeline"; then
-  crontab -l 2>/dev/null | grep -v -F "$PROJECT_ROOT/docker-compose.pipeline.yml run --rm pipeline" > /tmp/current_cron.$$ || true
+if crontab -l 2>/dev/null | grep -q -F "$PROJECT_ROOT/docker-compose.yml -f docker-compose.pipeline.yml run --rm pipeline"; then
+  crontab -l 2>/dev/null | grep -v -F "$PROJECT_ROOT/docker-compose.yml -f docker-compose.pipeline.yml run --rm pipeline" > /tmp/current_cron.$$ || true
 else
   crontab -l 2>/dev/null > /tmp/current_cron.$$ || true
 fi

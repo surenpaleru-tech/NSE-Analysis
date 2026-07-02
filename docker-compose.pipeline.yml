@@ -1,6 +1,25 @@
-version: "3.9"
-
 services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: nse-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-nse_intelligence}
+      POSTGRES_USER: ${POSTGRES_USER:-nse_admin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change_me_in_production}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init_db.sql:/docker-entrypoint-initdb.d/01-init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-nse_admin} -d ${POSTGRES_DB:-nse_intelligence}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - nse-network
+
   pipeline:
     build:
       context: ./pipeline
@@ -10,17 +29,21 @@ services:
     env_file:
       - .env
     environment:
-      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:${POSTGRES_PORT}/${POSTGRES_DB}
-      - APP_ENV=${APP_ENV:-production}
-      - APP_DEBUG=${APP_DEBUG:-false}
-      - NSE_RATE_LIMIT=${NSE_RATE_LIMIT:-3}
-      - BACKFILL_DAYS=${BACKFILL_DAYS:-365}
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-nse_admin}:${POSTGRES_PASSWORD:-change_me_in_production}@postgres:5432/${POSTGRES_DB:-nse_intelligence}
+      APP_ENV: ${APP_ENV:-production}
+      APP_DEBUG: ${APP_DEBUG:-false}
+      NSE_RATE_LIMIT: ${NSE_RATE_LIMIT:-3}
+      BACKFILL_DAYS: ${BACKFILL_DAYS:-365}
     depends_on:
       postgres:
         condition: service_healthy
     networks:
       - nse-network
     command: python run_pipeline.py
+
+volumes:
+  postgres_data:
+    driver: local
 
 networks:
   nse-network:
