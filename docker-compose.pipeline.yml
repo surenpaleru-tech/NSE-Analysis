@@ -37,6 +37,7 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    entrypoint: ["python", "run_pipeline.py"]
     networks:
       - nse-network
 
