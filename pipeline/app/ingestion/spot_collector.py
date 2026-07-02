@@ -115,7 +115,7 @@ class SpotCollector:
         except (ValueError, TypeError):
             return None
 
-    async def _ensure_spot_price_unique_constraint(self) -> None:
+    async def _ensure_spot_price_unique_index(self) -> None:
         if self._spot_constraint_checked:
             return
 
@@ -124,13 +124,14 @@ class SpotCollector:
                 """
                 SELECT EXISTS (
                     SELECT 1
-                    FROM pg_constraint
-                    WHERE conname = :constraint_name
-                      AND conrelid = 'spot_prices'::regclass
+                    FROM pg_class c
+                    JOIN pg_namespace n ON c.relnamespace = n.oid
+                    WHERE c.relkind IN ('i', 'I')
+                      AND c.relname = :index_name
                 )
                 """
             ),
-            {"constraint_name": "uq_spot_date_symbol"},
+            {"index_name": "uq_spot_date_symbol_idx"},
         )
         if result.scalar_one():
             self._spot_constraint_checked = True
@@ -140,8 +141,8 @@ class SpotCollector:
             await self.db.execute(
                 text(
                     """
-                    ALTER TABLE spot_prices
-                    ADD CONSTRAINT uq_spot_date_symbol UNIQUE (date, symbol)
+                    CREATE UNIQUE INDEX IF NOT EXISTS uq_spot_date_symbol_idx
+                    ON spot_prices (date, symbol)
                     """
                 )
             )
@@ -156,7 +157,7 @@ class SpotCollector:
         if not records:
             return 0
 
-        await self._ensure_spot_price_unique_constraint()
+        await self._ensure_spot_price_unique_index()
 
         chunk_size = 1000
         inserted_count = 0
@@ -165,7 +166,7 @@ class SpotCollector:
             chunk = records[i:i + chunk_size]
             stmt = insert(SpotPrice).values(chunk)
             stmt = stmt.on_conflict_do_update(
-                constraint="uq_spot_date_symbol",
+                index_elements=[SpotPrice.date, SpotPrice.symbol],
                 set_={
                     "open": stmt.excluded.open,
                     "high": stmt.excluded.high,
