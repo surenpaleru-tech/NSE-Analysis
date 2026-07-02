@@ -39,7 +39,6 @@ services:
         condition: service_healthy
     networks:
       - nse-network
-    command: python run_pipeline.py
 
 volumes:
   postgres_data:

@@ -21,5 +21,5 @@ RUN pip install --no-cache-dir -e .
 # Copy application source
 COPY . .
 
-# Default command — run the daily pipeline
-CMD ["python", "run_pipeline.py"]
+# Default entrypoint — run the daily pipeline, while allowing extra CLI args
+ENTRYPOINT ["python", "run_pipeline.py"]
