@@ -7,6 +7,7 @@ from datetime import date, datetime
 from typing import Optional
 
 import polars as pl
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.dialects.postgresql import insert
 
@@ -43,6 +44,7 @@ class OptionCollector:
 
     def __init__(self, db: AsyncSession):
         self.db = db
+        self._option_constraint_checked = False
 
     async def process_bhavcopy(
         self,
@@ -186,6 +188,7 @@ class OptionCollector:
         """Upsert option chain records using PostgreSQL ON CONFLICT in chunks."""
         if not records:
             return 0
+        await self._ensure_option_chain_unique_index()
 
         chunk_size = 1000
         inserted_count = 0
@@ -194,7 +197,13 @@ class OptionCollector:
             chunk = records[i:i + chunk_size]
             stmt = insert(OptionChain).values(chunk)
             stmt = stmt.on_conflict_do_update(
-                constraint="uq_oc_trade_symbol_expiry_strike_type",
+                index_elements=[
+                    OptionChain.trade_date,
+                    OptionChain.symbol,
+                    OptionChain.expiry,
+                    OptionChain.strike,
+                    OptionChain.option_type,
+                ],
                 set_={
                     "open": stmt.excluded.open,
                     "high": stmt.excluded.high,
@@ -211,3 +220,41 @@ class OptionCollector:
             inserted_count += len(chunk)
 
         return inserted_count
+
+    async def _ensure_option_chain_unique_index(self) -> None:
+        if self._option_constraint_checked:
+            return
+
+        result = await self.db.execute(
+            text(
+                """
+                SELECT EXISTS (
+                    SELECT 1
+                    FROM pg_class c
+                    JOIN pg_namespace n ON c.relnamespace = n.oid
+                    WHERE c.relkind IN ('i', 'I')
+                      AND c.relname = :index_name
+                )
+                """
+            ),
+            {"index_name": "uq_oc_trade_symbol_expiry_strike_type_idx"},
+        )
+        if result.scalar_one():
+            self._option_constraint_checked = True
+            return
+
+        try:
+            await self.db.execute(
+                text(
+                    """
+                    CREATE UNIQUE INDEX IF NOT EXISTS uq_oc_trade_symbol_expiry_strike_type_idx
+                    ON option_chain (trade_date, symbol, expiry, strike, option_type)
+                    """
+                )
+            )
+            await self.db.commit()
+        except Exception:
+            await self.db.rollback()
+            raise
+
+        self._option_constraint_checked = True
