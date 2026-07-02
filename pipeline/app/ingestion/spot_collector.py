@@ -6,6 +6,7 @@ from datetime import date
 from typing import Optional
 
 import polars as pl
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.dialects.postgresql import insert
 
@@ -23,6 +24,7 @@ class SpotCollector:
 
     def __init__(self, db: AsyncSession):
         self.db = db
+        self._spot_constraint_checked = False
 
     async def process_equity_bhavcopy(
         self,
@@ -113,9 +115,48 @@ class SpotCollector:
         except (ValueError, TypeError):
             return None
 
+    async def _ensure_spot_price_unique_constraint(self) -> None:
+        if self._spot_constraint_checked:
+            return
+
+        result = await self.db.execute(
+            text(
+                """
+                SELECT EXISTS (
+                    SELECT 1
+                    FROM pg_constraint
+                    WHERE conname = :constraint_name
+                      AND conrelid = 'spot_prices'::regclass
+                )
+                """
+            ),
+            {"constraint_name": "uq_spot_date_symbol"},
+        )
+        if result.scalar_one():
+            self._spot_constraint_checked = True
+            return
+
+        try:
+            await self.db.execute(
+                text(
+                    """
+                    ALTER TABLE spot_prices
+                    ADD CONSTRAINT uq_spot_date_symbol UNIQUE (date, symbol)
+                    """
+                )
+            )
+            await self.db.commit()
+        except Exception:
+            await self.db.rollback()
+            raise
+
+        self._spot_constraint_checked = True
+
     async def _upsert_records(self, records: list[dict]) -> int:
         if not records:
             return 0
+
+        await self._ensure_spot_price_unique_constraint()
 
         chunk_size = 1000
         inserted_count = 0
